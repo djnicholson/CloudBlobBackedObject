@@ -21,6 +21,10 @@ namespace CloudBlobBackedObject
     /// <typeparam name="T">Any serializable class</typeparam>
     public class CloudBlobBacked<T> where T : class
     {
+        /// <summary>
+        /// The minimum lease duration that may be passed to the constructor (using this 
+        /// value will result in the lease being continually extended with no delay).
+        /// </summary>
         public const int MinimumLeaseInSeconds = 10;
 
         /// <summary>

@@ -5,6 +5,11 @@ VisualStudioVersion = 14.0.23107.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CloudBlobBackedObject", "CloudBlobBackedObject\CloudBlobBackedObject.csproj", "{4E881E8C-0154-4D09-80FD-F4E04F0760B4}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "nuget", "nuget", "{CC6A461D-375D-43B2-8910-D9DF21919A4D}"
+	ProjectSection(SolutionItems) = preProject
+		..\nuget\CloudBlobBackedObject.1.0.0.nupkg = ..\nuget\CloudBlobBackedObject.1.0.0.nupkg
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
