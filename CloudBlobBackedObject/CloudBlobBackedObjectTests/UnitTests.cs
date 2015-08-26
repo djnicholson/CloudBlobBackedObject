@@ -1,5 +1,4 @@
-﻿using System;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace CloudBlobBackedObjectTests
 {
@@ -7,8 +6,9 @@ namespace CloudBlobBackedObjectTests
     public class UnitTests
     {
         [TestMethod]
-        public void TestMethod1()
+        public void HelloWorld()
         {
+            Assert.Inconclusive("No tests yet!");
         }
     }
 }
