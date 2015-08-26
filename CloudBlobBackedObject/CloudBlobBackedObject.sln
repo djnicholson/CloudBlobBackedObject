@@ -10,6 +10,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "nuget", "nuget", "{CC6A461D
 		..\nuget\CloudBlobBackedObject.nuspec = ..\nuget\CloudBlobBackedObject.nuspec
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CloudBlobBackedObjectTests", "CloudBlobBackedObjectTests\CloudBlobBackedObjectTests.csproj", "{EE6C622D-66AC-4F4C-AEF3-4D31CB2C0CE5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,6 +22,10 @@ Global
 		{4E881E8C-0154-4D09-80FD-F4E04F0760B4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4E881E8C-0154-4D09-80FD-F4E04F0760B4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4E881E8C-0154-4D09-80FD-F4E04F0760B4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EE6C622D-66AC-4F4C-AEF3-4D31CB2C0CE5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EE6C622D-66AC-4F4C-AEF3-4D31CB2C0CE5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EE6C622D-66AC-4F4C-AEF3-4D31CB2C0CE5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EE6C622D-66AC-4F4C-AEF3-4D31CB2C0CE5}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
