@@ -89,7 +89,7 @@
       Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' " />
     <BuildNuSpecTask
       NuGetPath="$(NuGetExePath)"
-      NuSpecPath="..\..\..\nuget\CloudBlobBackedObject.nuspec"
+      NuSpecPath="..\..\..\src\nuget\CloudBlobBackedObject.nuspec"
       ProjectDirectory="$(MSBuildProjectDirectory)"
       OutDir="$(TargetPath)\nuget"  
       Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' " />
