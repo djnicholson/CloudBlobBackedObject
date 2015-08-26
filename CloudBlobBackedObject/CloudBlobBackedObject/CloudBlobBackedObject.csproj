@@ -80,11 +80,14 @@
     <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
-       Other similar extension points exist, see Microsoft.Common.targets.
+  <Import Project="..\packages\MsBuild.NuGet.Pack.1.6.1\tools\MsBuild.NuGet.Pack.targets" Condition="Exists('..\packages\MsBuild.NuGet.Pack.1.6.1\tools\MsBuild.NuGet.Pack.targets')" />
   <Target Name="BeforeBuild">
   </Target>
   <Target Name="AfterBuild">
+    <BuildNuSpecTask
+      NuGetPath="$(NuGetExePath)"
+      NuSpecPath="..\..\nuget\CloudBlobBackedObject.nuspec"
+      ProjectDirectory="$(ProjectDirectory)"
+      OutDir="$(TargetDir)" />
   </Target>
-  -->
 </Project>
