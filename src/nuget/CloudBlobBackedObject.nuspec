@@ -13,7 +13,7 @@
         </dependencies>
     </metadata>
     <files>
-        <file src="..\target\Release\lib\CloudBlobBackedObject.dll" target="lib\net45\CloudBlobBackedObject.dll" />
+        <file src="..\..\target\Release\lib\CloudBlobBackedObject.dll" target="lib\net45\CloudBlobBackedObject.dll" />
         <file src="..\CloudBlobBackedObject\CloudBlobBackedObject\CloudBlobBacked.cs" target="src\CloudBlobBacked.cs" />
     </files>
 </package>
