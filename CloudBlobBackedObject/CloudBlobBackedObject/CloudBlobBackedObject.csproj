@@ -12,27 +12,26 @@
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />
+    <TargetPath>..\..\target\$(Configuration)</TargetPath>
+    <OutputPath>$(TargetPath)\lib</OutputPath>
+    <DocumentationFile>$(OutputPath)\CloudBlobBackedObject.xml</DocumentationFile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>..\..\target\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <DocumentationFile>..\..\target\Debug\CloudBlobBackedObject.xml</DocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>..\..\target\Release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <DocumentationFile>..\..\target\Release\CloudBlobBackedObject.xml</DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Microsoft.Azure.KeyVault.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
@@ -80,14 +79,19 @@
     <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <Import Project="..\packages\MsBuild.NuGet.Pack.1.6.1\tools\MsBuild.NuGet.Pack.targets" Condition="Exists('..\packages\MsBuild.NuGet.Pack.1.6.1\tools\MsBuild.NuGet.Pack.targets')" />
   <Target Name="BeforeBuild">
   </Target>
+  <Import Project="..\packages\MsBuild.NuGet.Pack.1.6.1\tools\MsBuild.NuGet.Pack.targets" 
+    Condition="Exists('..\packages\MsBuild.NuGet.Pack.1.6.1\tools\MsBuild.NuGet.Pack.targets')" />
   <Target Name="AfterBuild">
+    <MakeDir
+      Directories="$(TargetPath)\nuget"
+      Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' " />
     <BuildNuSpecTask
       NuGetPath="$(NuGetExePath)"
-      NuSpecPath="..\..\nuget\CloudBlobBackedObject.nuspec"
-      ProjectDirectory="$(ProjectDirectory)"
-      OutDir="$(TargetDir)" />
+      NuSpecPath="..\..\..\nuget\CloudBlobBackedObject.nuspec"
+      ProjectDirectory="$(MSBuildProjectDirectory)"
+      OutDir="$(TargetPath)\nuget"  
+      Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' " />
   </Target>
 </Project>
