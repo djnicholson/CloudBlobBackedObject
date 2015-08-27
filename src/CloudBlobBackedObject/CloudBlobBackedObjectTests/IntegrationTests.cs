@@ -19,7 +19,7 @@ namespace CloudBlobBackedObjectTests
             // (where foo is a Azure Storage access key)
             if (storageKey == null)
             {
-                throw new InternalTestFailureException(
+                Assert.Fail(
                     @"HKEY_LOCAL_MACHINE\SOFTWARE\djnicholson\CloudBlobBackedObject\StorageKey not found");
             }
         }
