@@ -10,17 +10,17 @@ namespace CloudBlobBackedObjectTests
         public void TestSetup()
         {
             string storageKey = Registry.GetValue(
-                @"HKEY_LOCAL_MACHINE\SOFTWARE\djnicholson\CloudBlobBackedObject",
+                @"HKEY_CURRENT_USER\SOFTWARE\djnicholson\CloudBlobBackedObject",
                 "StorageKey",
                 null) as string;
 
             // If this fails, run the following command:
-            //   reg add HKEY_LOCAL_MACHINE\SOFTWARE\djnicholson\CloudBlobBackedObject /v StorageKey /t REG_SZ /f /d foo
+            //   reg add HKEY_CURRENT_USER\SOFTWARE\djnicholson\CloudBlobBackedObject /v StorageKey /t REG_SZ /f /d foo
             // (where foo is a Azure Storage access key)
             if (storageKey == null)
             {
                 Assert.Fail(
-                    @"HKEY_LOCAL_MACHINE\SOFTWARE\djnicholson\CloudBlobBackedObject\StorageKey not found");
+                    @"HKEY_CURRENT_USER\SOFTWARE\djnicholson\CloudBlobBackedObject\StorageKey not found");
             }
         }
 
