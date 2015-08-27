@@ -16,7 +16,7 @@ namespace CloudBlobBackedObjectTests
 
             // If this fails, run the following command:
             //   reg add HKEY_CURRENT_USER\SOFTWARE\djnicholson\CloudBlobBackedObject /v StorageKey /t REG_SZ /f /d foo
-            // (where foo is a Azure Storage access key)
+            // (where foo is an Azure Storage access key)
             if (storageKey == null)
             {
                 Assert.Fail(
