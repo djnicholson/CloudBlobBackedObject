@@ -25,7 +25,7 @@ namespace CloudBlobBackedObject
         /// The minimum lease duration that may be passed to the constructor (using this 
         /// value will result in the lease being continually extended with no delay).
         /// </summary>
-        public const int MinimumLeaseInSeconds = 10;
+        public const int MinimumLeaseInSeconds = 20;
 
         /// <summary>
         /// Create a wrapper around an object that is backed in Azure Blob Storage.
