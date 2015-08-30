@@ -3,6 +3,7 @@ using Microsoft.WindowsAzure.Storage.Blob;
 
 using System;
 using System.IO;
+using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Threading;
 
@@ -270,7 +271,14 @@ namespace CloudBlobBackedObject
                     {
                         currentBlobContents.Seek(0, SeekOrigin.Begin);
                         BinaryFormatter formatter = new BinaryFormatter();
-                        temp = (T)formatter.Deserialize(currentBlobContents);
+                        try
+                        {
+                            temp = (T) formatter.Deserialize(currentBlobContents);
+                        }
+                        catch (SerializationException)
+                        {
+                            exists = false;
+                        }
                     }
                 }
                 catch (StorageException e)
