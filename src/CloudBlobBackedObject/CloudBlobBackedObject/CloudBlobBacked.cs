@@ -170,7 +170,7 @@ namespace CloudBlobBackedObject
             if (leaseRenewer != null)
             {
                 leaseRenewer.Abort();
-                blobReader.Join();
+                leaseRenewer.Join();
             }
         }
 
