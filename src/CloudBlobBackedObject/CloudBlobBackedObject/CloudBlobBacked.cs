@@ -144,9 +144,21 @@ namespace CloudBlobBackedObject
         /// </summary>
         ~CloudBlobBacked()
         {
+            Shutdown();
+        }
+
+        /// <summary>
+        /// Aborts the various worker threads.  The writer thread is allowed to fully terminate before the
+        /// lease renewer thread is aborted (to allow a final write to succeed before giving up the lease).
+        /// The object can still be used after calling Shutdown, but it will no longer be periodically
+        /// synchonrized with the data in the cloud and the lease (if taken) will be given up.
+        /// </summary>
+        public void Shutdown()
+        { 
             if (blobReader != null)
             {
                 blobReader.Abort();
+                blobReader.Join();
             }
 
             if (blobWriter != null)
@@ -158,6 +170,7 @@ namespace CloudBlobBackedObject
             if (leaseRenewer != null)
             {
                 leaseRenewer.Abort();
+                blobReader.Join();
             }
         }
 
