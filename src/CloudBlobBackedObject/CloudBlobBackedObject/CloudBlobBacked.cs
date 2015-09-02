@@ -23,8 +23,7 @@ namespace CloudBlobBackedObject
     public class CloudBlobBacked<T> where T : class
     {
         /// <summary>
-        /// The minimum lease duration that may be passed to the constructor (using this 
-        /// value will result in the lease being continually extended with no delay).
+        /// The minimum lease duration that may be passed to the constructor.
         /// </summary>
         public const int MinimumLeaseInSeconds = 20;
 
@@ -159,18 +158,21 @@ namespace CloudBlobBackedObject
             {
                 blobReader.Abort();
                 blobReader.Join();
+                blobReader = null;
             }
 
             if (blobWriter != null)
             {
                 blobWriter.Abort();
                 blobWriter.Join(); // allow for final write to succeed
+                blobWriter = null;
             }
 
             if (leaseRenewer != null)
             {
                 leaseRenewer.Abort();
                 leaseRenewer.Join();
+                leaseRenewer = null;
             }
         }
 
@@ -209,14 +211,20 @@ namespace CloudBlobBackedObject
                     while (true)
                     {
                         // Renew lease MinimumLeaseInSeconds before it expires:
-                        Thread.Sleep(leaseDuration - TimeSpan.FromSeconds(MinimumLeaseInSeconds));
+                        Thread.Sleep(leaseDuration - TimeSpan.FromSeconds(MinimumLeaseInSeconds / 2));
 
-                        backingBlob.RenewLease(this.writeAccessCondition);
+                        lock (this.writeAccessCondition)
+                        {
+                            backingBlob.RenewLease(this.writeAccessCondition);
+                        }
                     }
                 }
                 catch (ThreadAbortException)
                 {
-                    backingBlob.ReleaseLease(this.writeAccessCondition);
+                    lock (this.writeAccessCondition)
+                    {
+                        backingBlob.ReleaseLease(this.writeAccessCondition);
+                    }
                 }
             }));
             this.leaseRenewer.Start();
@@ -226,7 +234,7 @@ namespace CloudBlobBackedObject
         /// Start a thread that writes the local state to the backing blob (if needed) at the given frequency,
         /// and writes the local state one final time when the htread is aborted.
         /// </summary>
-        private void StartBlobWriter(ICloudBlob backingBlob, TimeSpan? writeToCloudFrequency)
+        private void StartBlobWriter(ICloudBlob backingBlob, TimeSpan writeToCloudFrequency)
         {
             this.blobWriter = new Thread(() =>
             {
@@ -234,7 +242,7 @@ namespace CloudBlobBackedObject
                 {
                     while (true)
                     {
-                        Thread.Sleep(writeToCloudFrequency.Value);
+                        Thread.Sleep(writeToCloudFrequency);
                         SaveDataToCloudBlob(backingBlob);
                     }
                 }
@@ -261,7 +269,7 @@ namespace CloudBlobBackedObject
                     TryRefreshDataFromCloudBlob(backingBlob);
                 }
             });
-            blobReader.Start();
+            this.blobReader.Start();
         }
 
         private bool TryRefreshDataFromCloudBlob(ICloudBlob backingBlob)
@@ -276,9 +284,12 @@ namespace CloudBlobBackedObject
 
                 try
                 {
-                    OperationContext context = new OperationContext();
-                    backingBlob.DownloadToStream(currentBlobContents, accessCondition: this.readAccessCondition, operationContext: context);
-                    this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
+                    lock (this.readAccessCondition)
+                    {
+                        OperationContext context = new OperationContext();
+                        backingBlob.DownloadToStream(currentBlobContents, accessCondition: this.readAccessCondition, operationContext: context);
+                        this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
+                    }
 
                     if (currentBlobContents.Length != 0)
                     {
@@ -340,10 +351,13 @@ namespace CloudBlobBackedObject
                 return;
             }
 
-            OperationContext context = new OperationContext();
-            backingBlob.UploadFromByteArray(buffer, 0, buffer.Length, accessCondition: this.writeAccessCondition, operationContext: context);
-            this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
-            this.lastKnownBlobContents = buffer;
+            lock (this.readAccessCondition)
+            {
+                OperationContext context = new OperationContext();
+                backingBlob.UploadFromByteArray(buffer, 0, buffer.Length, accessCondition: this.writeAccessCondition, operationContext: context);
+                this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
+                this.lastKnownBlobContents = buffer;
+            }
         }
 
         private static bool ArrayEquals(byte[] xs, byte[] ys)
