@@ -212,7 +212,7 @@ namespace CloudBlobBackedObject
                     while (true)
                     {
                         // Renew lease MinimumLeaseInSeconds before it expires:
-                        Thread.Sleep(leaseDuration - TimeSpan.FromSeconds(MinimumLeaseInSeconds / 2));
+                        Thread.Sleep(leaseDuration - TimeSpan.FromSeconds(MinimumLeaseInSeconds / 2.0));
 
                         lock (this.writeAccessCondition)
                         {
