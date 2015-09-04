@@ -80,6 +80,7 @@ namespace CloudBlobBackedObject
             if (leaseDuration.HasValue)
             {
                 TryAquireLease(backingBlob, leaseDuration.Value);
+                TryRefreshDataFromCloudBlob(backingBlob);
             }
 
             if (writeToCloudFrequency.HasValue)
