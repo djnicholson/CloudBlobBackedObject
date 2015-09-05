@@ -170,23 +170,26 @@ namespace CloudBlobBackedObject
         {
             if (this.blobReader != null)
             {
-                this.blobReader.Abort();
-                this.blobReader.Join();
+                Thread t = this.blobReader;
                 this.blobReader = null;
+                t.Interrupt();
+                t.Join();
             }
 
             if (this.blobWriter != null)
             {
-                this.blobWriter.Abort();
-                this.blobWriter.Join(); // allow for final write to succeed
+                Thread t = this.blobWriter;
                 this.blobWriter = null;
+                t.Interrupt();
+                t.Join();
             }
 
             if (this.leaseRenewer != null)
             {
-                this.leaseRenewer.Abort();
-                this.leaseRenewer.Join();
+                Thread t = this.leaseRenewer;
                 this.leaseRenewer = null;
+                t.Interrupt();
+                t.Join();
             }
         }
 
@@ -220,9 +223,9 @@ namespace CloudBlobBackedObject
         {
             this.leaseRenewer = (new Thread(() =>
             {
-                try
+                while (this.leaseRenewer != null)
                 {
-                    while (true)
+                    try
                     {
                         // Renew lease MinimumLeaseInSeconds before it expires:
                         Thread.Sleep(leaseDuration - TimeSpan.FromSeconds(MinimumLeaseInSeconds));
@@ -232,20 +235,12 @@ namespace CloudBlobBackedObject
                             this.backingBlob.RenewLease(this.writeAccessCondition);
                         }
                     }
-                }
-                catch (ThreadAbortException)
-                {
-                    lock (this.writeAccessCondition)
+                    catch (ThreadInterruptedException)
                     {
-                        try
-                        {
-                            this.backingBlob.ReleaseLease(this.writeAccessCondition);
-                        }
-                        catch (StorageException)
-                        {
-                        }
                     }
                 }
+
+                this.backingBlob.ReleaseLease(this.writeAccessCondition);
             }));
             this.leaseRenewer.Start();
         }
@@ -258,17 +253,16 @@ namespace CloudBlobBackedObject
         {
             this.blobWriter = new Thread(() =>
             {
-                try
+                while (this.blobWriter != null)
                 {
-                    while (true)
+                    try
                     {
                         Thread.Sleep(writeToCloudFrequency);
-                        SaveDataToCloudBlob();
                     }
-                }
-                catch (ThreadAbortException)
-                {
-                    // Save final state before shutdown
+                    catch (ThreadInterruptedException)
+                    {
+                    }
+
                     SaveDataToCloudBlob();
                 }
             });
@@ -283,10 +277,16 @@ namespace CloudBlobBackedObject
         {
             this.blobReader = new Thread(() =>
             {
-                while (true)
+                while (this.blobReader != null)
                 {
-                    Thread.Sleep(readFromCloudFrequency);
-                    TryRefreshDataFromCloudBlob();
+                    try
+                    {
+                        Thread.Sleep(readFromCloudFrequency);
+                        TryRefreshDataFromCloudBlob();
+                    }
+                    catch (ThreadInterruptedException)
+                    {
+                    }
                 }
             });
             this.blobReader.Start();
