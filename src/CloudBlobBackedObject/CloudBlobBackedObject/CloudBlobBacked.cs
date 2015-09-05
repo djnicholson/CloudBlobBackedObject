@@ -82,6 +82,7 @@ namespace CloudBlobBackedObject
             if (leaseDuration.HasValue)
             {
                 TryAquireLeaseAndRefresh(leaseDuration.Value);
+                TryRefreshDataFromCloudBlob();
             }
 
             if (writeToCloudFrequency.HasValue)
@@ -197,7 +198,7 @@ namespace CloudBlobBackedObject
         {
             try
             {
-                this.writeAccessCondition.LeaseId = backingBlob.AcquireLease(leaseDuration, proposedLeaseId: null);
+                this.writeAccessCondition.LeaseId = this.backingBlob.AcquireLease(leaseDuration, proposedLeaseId: null);
             }
             catch (StorageException e)
             {
@@ -209,8 +210,6 @@ namespace CloudBlobBackedObject
             }
 
             StartLeaseRenewer(leaseDuration);
-
-            TryRefreshDataFromCloudBlob();
         }
 
         /// <summary>
@@ -238,7 +237,13 @@ namespace CloudBlobBackedObject
                 {
                     lock (this.writeAccessCondition)
                     {
-                        this.backingBlob.ReleaseLease(this.writeAccessCondition);
+                        try
+                        {
+                            this.backingBlob.ReleaseLease(this.writeAccessCondition);
+                        }
+                        catch (StorageException)
+                        {
+                        }
                     }
                 }
             }));

@@ -367,7 +367,7 @@ namespace CloudBlobBackedObjectTests
 
                 writer1.Object = "1";
                 writer2.Object = "2";
-                Thread.Sleep(TimeSpan.FromSeconds(1.0));
+                Thread.Sleep(TimeSpan.FromSeconds(2.0));
 
                 Assert.AreEqual("2", reader.Object);
 
