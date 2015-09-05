@@ -67,7 +67,7 @@ namespace CloudBlobBackedObject
             TimeSpan? writeToCloudFrequency = null,
             TimeSpan? readFromCloudFrequency = null)
         {
-            if (leaseDuration < TimeSpan.FromSeconds(MinimumLeaseInSeconds))
+            if (leaseDuration.HasValue && (leaseDuration < TimeSpan.FromSeconds(MinimumLeaseInSeconds)))
             {
                 throw new ArgumentException("Lease duration too short", "leaseDuration");
             }
