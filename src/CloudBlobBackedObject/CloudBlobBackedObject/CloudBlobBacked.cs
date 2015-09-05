@@ -167,7 +167,7 @@ namespace CloudBlobBackedObject
         /// synchonrized with the data in the cloud and the lease (if taken) will be given up.
         /// </summary>
         public void Shutdown()
-        { 
+        {
             if (this.blobReader != null)
             {
                 this.blobReader.Abort();
@@ -302,40 +302,37 @@ namespace CloudBlobBackedObject
 
                 MemoryStream currentBlobContents = new MemoryStream();
 
-                try
+                lock (this.syncRoot)
                 {
-                    lock (this.readAccessCondition)
+                    try
                     {
                         OperationContext context = new OperationContext();
                         this.backingBlob.DownloadToStream(currentBlobContents, accessCondition: this.readAccessCondition, operationContext: context);
                         this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
+
+                        if (currentBlobContents.Length != 0)
+                        {
+                            currentBlobContents.Seek(0, SeekOrigin.Begin);
+                            BinaryFormatter formatter = new BinaryFormatter();
+                            try
+                            {
+                                temp = (T)formatter.Deserialize(currentBlobContents);
+                            }
+                            catch (SerializationException)
+                            {
+                                exists = false;
+                            }
+                        }
+                    }
+                    catch (StorageException e)
+                    {
+                        if (HttpStatusCode(e) != 404) // Not found
+                        {
+                            throw;
+                        }
+                        exists = false;
                     }
 
-                    if (currentBlobContents.Length != 0)
-                    {
-                        currentBlobContents.Seek(0, SeekOrigin.Begin);
-                        BinaryFormatter formatter = new BinaryFormatter();
-                        try
-                        {
-                            temp = (T) formatter.Deserialize(currentBlobContents);
-                        }
-                        catch (SerializationException)
-                        {
-                            exists = false;
-                        }
-                    }
-                }
-                catch (StorageException e)
-                {
-                    if (HttpStatusCode(e) != 404) // Not found
-                    {
-                        throw;
-                    }
-                    exists = false;
-                }
-
-                lock (syncRoot)
-                {
                     this.localObject = temp;
                     if (exists)
                     {
@@ -360,25 +357,24 @@ namespace CloudBlobBackedObject
 
         private bool SaveDataToCloudBlob()
         {
-            byte[] buffer;
-            lock (syncRoot)
+            lock (this.writeAccessCondition)
+            lock (this.syncRoot)
             {
-                buffer = SerializeToBytes(this.localObject);
-            }
+                byte[] buffer = SerializeToBytes(this.localObject);
 
-            if (ArrayEquals(buffer, this.lastKnownBlobContents))
-            {
-                return true;
-            }
 
-            lock (this.readAccessCondition)
-            {
+                if (ArrayEquals(buffer, this.lastKnownBlobContents))
+                {
+                    return true;
+                }
+
                 try
                 {
                     OperationContext context = new OperationContext();
                     this.backingBlob.UploadFromByteArray(buffer, 0, buffer.Length, accessCondition: this.writeAccessCondition, operationContext: context);
                     this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
                     this.lastKnownBlobContents = buffer;
+                    return true;
                 }
                 catch (StorageException e)
                 {
@@ -386,11 +382,10 @@ namespace CloudBlobBackedObject
                     {
                         throw;
                     }
+
                     return false;
                 }
             }
-
-            return true;
         }
 
         private static bool ArrayEquals(byte[] xs, byte[] ys)
