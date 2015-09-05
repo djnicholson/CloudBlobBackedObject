@@ -50,7 +50,6 @@ namespace CloudBlobBackedObjectTests
         [TestCleanup]
         public void TestCleanup()
         {
-            GC.Collect();
             bool success = false;
             while (!success)
             {
@@ -72,6 +71,7 @@ namespace CloudBlobBackedObjectTests
 
                 if (!success)
                 {
+                    GC.Collect();
                     Thread.Sleep(TimeSpan.FromSeconds(1.0));
                 }
             }
