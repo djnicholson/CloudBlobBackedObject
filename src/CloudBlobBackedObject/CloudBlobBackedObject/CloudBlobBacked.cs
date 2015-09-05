@@ -72,6 +72,8 @@ namespace CloudBlobBackedObject
                 throw new ArgumentException("Lease duration too short", "leaseDuration");
             }
 
+            this.BackingBlobUri = backingBlob.StorageUri;
+
             if (!TryRefreshDataFromCloudBlob(backingBlob))
             {
                 SaveDataToCloudBlob(backingBlob);
@@ -131,6 +133,15 @@ namespace CloudBlobBackedObject
             {
                 return this.syncRoot;
             }
+        }
+
+        /// <summary>
+        /// URL of this object in blob storage
+        /// </summary>
+        public StorageUri BackingBlobUri
+        {
+            get;
+            private set;
         }
 
         /// <summary>

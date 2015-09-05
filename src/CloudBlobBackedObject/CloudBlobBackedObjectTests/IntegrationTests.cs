@@ -146,11 +146,13 @@ namespace CloudBlobBackedObjectTests
         {
             AllVariations<string>(target => 
             {
+                Assert.IsTrue(blobClient.GetBlobReferenceFromServer(target.BackingBlobUri).Exists());
                 Assert.IsNull(target.Object);
                 target.Object = "Hello world!";
                 Assert.AreEqual("Hello world!", target.Object);
                 Thread.Sleep(TimeSpan.FromSeconds(3.0));
                 Assert.AreEqual("Hello world!", target.Object);
+                Assert.IsTrue(blobClient.GetBlobReferenceFromServer(target.BackingBlobUri).Exists());
             });
         }
 
