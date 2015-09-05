@@ -1,6 +1,7 @@
 ﻿using CloudBlobBackedObject;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Microsoft.Win32;
+using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
 using System;
@@ -49,11 +50,29 @@ namespace CloudBlobBackedObjectTests
         [TestCleanup]
         public void TestCleanup()
         {
-            foreach (IListBlobItem blob in this.blobClient.GetRootContainerReference().ListBlobs())
+            GC.Collect();
+            bool success = false;
+            while (!success)
             {
-                if (blob.Uri.ToString().Contains(this.blobPrefix))
+                success = true;
+                foreach (IListBlobItem blob in this.blobClient.GetRootContainerReference().ListBlobs())
                 {
-                    this.blobClient.GetBlobReferenceFromServer(blob.StorageUri).DeleteIfExists();
+                    if (blob.Uri.ToString().Contains(this.blobPrefix))
+                    {
+                        try
+                        {
+                            this.blobClient.GetBlobReferenceFromServer(blob.StorageUri).DeleteIfExists();
+                        }
+                        catch (StorageException)
+                        {
+                            success = false;
+                        }
+                    }
+                }
+
+                if (!success)
+                {
+                    Thread.Sleep(TimeSpan.FromSeconds(1.0));
                 }
             }
         }
@@ -130,9 +149,46 @@ namespace CloudBlobBackedObjectTests
                 Assert.IsNull(target.Object);
                 target.Object = "Hello world!";
                 Assert.AreEqual("Hello world!", target.Object);
-                Thread.Sleep(TimeSpan.FromSeconds(5.0));
+                Thread.Sleep(TimeSpan.FromSeconds(3.0));
                 Assert.AreEqual("Hello world!", target.Object);
             });
+        }
+
+        public void ReaderWriterImpl(TimeSpan? lease = null)
+        {
+            var blob = NewBlob();
+
+            var writer = new CloudBlobBacked<string>(
+                blob,
+                leaseDuration: lease,
+                writeToCloudFrequency: TimeSpan.FromSeconds(1.0));
+
+            var reader = new CloudBlobBacked<string>(
+                blob,
+                readFromCloudFrequency: TimeSpan.FromSeconds(1.0));
+
+            writer.Object = "Hello world!";
+
+            while (!writer.Object.Equals(reader.Object))
+            {
+                Trace.TraceInformation("waiting...");
+                Thread.Sleep(TimeSpan.FromSeconds(0.25));
+            }
+
+            reader.Shutdown();
+            writer.Shutdown();
+        }
+
+        [TestMethod]
+        public void ReaderWriterWithoutLease()
+        {
+            ReaderWriterImpl();
+        }
+
+        [TestMethod]
+        public void ReaderWriterWithLease()
+        {
+            ReaderWriterImpl(lease: TimeSpan.FromSeconds(30.0));
         }
     }
 }
