@@ -154,6 +154,46 @@ namespace CloudBlobBackedObjectTests
             });
         }
 
+        [TestMethod]
+        public void Lease()
+        {
+            var blob = NewBlob();
+
+            // Take a lease out on a new blob
+            var exclusiveWriter = new CloudBlobBacked<string>(
+                blob,
+                writeToCloudFrequency: TimeSpan.FromSeconds(0.5), 
+                leaseDuration: TimeSpan.FromMinutes(1.0));
+            exclusiveWriter.Object = "Hello";
+
+            // Verify that no one else can take the lease
+            try
+            {
+                new CloudBlobBacked<string>(blob, leaseDuration: TimeSpan.FromMinutes(0.5));
+            }
+            catch(InvalidOperationException)
+            {
+            }
+
+            // A reader is ok though
+            Thread.Sleep(TimeSpan.FromSeconds(2.0));
+            var reader = new CloudBlobBacked<string>(blob, readFromCloudFrequency: TimeSpan.FromSeconds(0.5));
+            Assert.AreEqual("Hello", reader.Object);
+
+            // Someone else can try and update it, but updates will not be made while the lease is active...
+            var otherWriter = new CloudBlobBacked<string>(blob, writeToCloudFrequency: TimeSpan.FromSeconds(0.5));
+            otherWriter.Object = "I changed";
+            Thread.Sleep(TimeSpan.FromSeconds(2.0));
+            Assert.AreNotEqual("I changed", reader.Object);
+            Assert.AreEqual("I changed", otherWriter.Object);
+
+            // The write will eventually be made after the lease is given up though
+            exclusiveWriter.Shutdown();
+            Thread.Sleep(TimeSpan.FromSeconds(2.0));
+            Assert.AreEqual("I changed", reader.Object);
+            Assert.AreEqual("I changed", otherWriter.Object);
+        }
+
         public void ReaderWriterImpl(TimeSpan? lease = null)
         {
             var blob = NewBlob();

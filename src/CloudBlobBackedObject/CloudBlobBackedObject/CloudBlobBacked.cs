@@ -354,10 +354,20 @@ namespace CloudBlobBackedObject
 
             lock (this.readAccessCondition)
             {
-                OperationContext context = new OperationContext();
-                backingBlob.UploadFromByteArray(buffer, 0, buffer.Length, accessCondition: this.writeAccessCondition, operationContext: context);
-                this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
-                this.lastKnownBlobContents = buffer;
+                try
+                {
+                    OperationContext context = new OperationContext();
+                    backingBlob.UploadFromByteArray(buffer, 0, buffer.Length, accessCondition: this.writeAccessCondition, operationContext: context);
+                    this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
+                    this.lastKnownBlobContents = buffer;
+                }
+                catch (StorageException e)
+                {
+                    if (HttpStatusCode(e) != 412) // Someone else has the lease
+                    {
+                        throw;
+                    }
+                }
             }
         }
 
