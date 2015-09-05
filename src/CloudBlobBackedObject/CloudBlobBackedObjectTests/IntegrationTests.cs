@@ -192,6 +192,9 @@ namespace CloudBlobBackedObjectTests
             Thread.Sleep(TimeSpan.FromSeconds(2.0));
             Assert.AreEqual("I changed", reader.Object);
             Assert.AreEqual("I changed", otherWriter.Object);
+
+            reader.Shutdown();
+            otherWriter.Shutdown();
         }
 
         public void ReaderWriterImpl(TimeSpan? lease = null)
@@ -229,6 +232,49 @@ namespace CloudBlobBackedObjectTests
         public void ReaderWriterWithLease()
         {
             ReaderWriterImpl(lease: TimeSpan.FromSeconds(30.0));
+        }
+
+        [TestMethod]
+        public void MultipleWriters()
+        {
+            var blob = NewBlob();
+
+            // Two instances fighting over the value of an object and a witness
+            // that ensures they each win at least once.
+
+            var witness = new CloudBlobBacked<string>(
+                blob,
+                readFromCloudFrequency: TimeSpan.FromSeconds(0.1));
+
+            var writer1 = new CloudBlobBacked<string>(
+                blob,
+                readFromCloudFrequency: TimeSpan.FromSeconds(0.1),
+                writeToCloudFrequency: TimeSpan.FromSeconds(0.3));
+
+            var writer2 = new CloudBlobBacked<string>(
+                blob,
+                readFromCloudFrequency: TimeSpan.FromSeconds(0.1),
+                writeToCloudFrequency: TimeSpan.FromSeconds(0.7));
+
+            bool writer1Success = false;
+            bool writer2Success = false;
+
+            witness.OnUpdate += (s, e) =>
+            {
+                writer1Success |= "1".Equals(witness.Object);
+                writer2Success |= "2".Equals(witness.Object);
+            };
+                
+            while (!writer1Success || !writer2Success)
+            {
+                writer1.Object = "1";
+                writer2.Object = "2";
+                Thread.Yield();
+            }
+
+            witness.Shutdown();
+            writer1.Shutdown();
+            writer2.Shutdown();
         }
     }
 }
