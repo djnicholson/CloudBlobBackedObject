@@ -298,5 +298,46 @@ namespace CloudBlobBackedObjectTests
             
             writer.Shutdown();
         }
+
+        [TestMethod]
+        public void LockBlocksReads()
+        {
+            var blob = NewBlob();
+
+            var writer = new CloudBlobBacked<string>(
+                blob,
+                writeToCloudFrequency: TimeSpan.FromSeconds(0.1));
+            writer.Object = "hello";
+            Thread.Sleep(TimeSpan.FromSeconds(1.0));
+
+            var reader1 = new CloudBlobBacked<string>(
+                blob,
+                readFromCloudFrequency: TimeSpan.FromSeconds(0.1));
+
+            var reader2 = new CloudBlobBacked<string>(
+                blob,
+                readFromCloudFrequency: TimeSpan.FromSeconds(0.1));
+
+            lock (reader1.SyncRoot)
+            {
+                Assert.AreEqual("hello", reader1.Object);
+                Assert.AreEqual("hello", reader2.Object);
+
+                writer.Object = "new";
+                Thread.Sleep(TimeSpan.FromSeconds(1.0));
+
+                Assert.AreEqual("hello", reader1.Object);
+                Assert.AreEqual("new", reader2.Object);
+            }
+
+            Thread.Sleep(TimeSpan.FromSeconds(1.0));
+
+            Assert.AreEqual("new", reader1.Object);
+            Assert.AreEqual("new", reader2.Object);
+
+            reader1.Shutdown();
+            reader2.Shutdown();
+            writer.Shutdown();
+        }
     }
 }
