@@ -276,5 +276,27 @@ namespace CloudBlobBackedObjectTests
             writer1.Shutdown();
             writer2.Shutdown();
         }
+
+        [TestMethod]
+        public void ReadOnlySnapshot()
+        {
+            var blob = NewBlob();
+
+            var writer = new CloudBlobBacked<string>(
+                blob,
+                writeToCloudFrequency: TimeSpan.FromSeconds(0.5));
+            writer.Object = "hello";
+            Thread.Sleep(TimeSpan.FromSeconds(1.0));
+
+            var snapshot = new CloudBlobBacked<string>(blob);
+            Assert.AreEqual("hello", snapshot.Object);
+
+            writer.Object = "changed";
+            Thread.Sleep(TimeSpan.FromSeconds(1.0));
+
+            Assert.AreEqual("hello", snapshot.Object);
+            
+            writer.Shutdown();
+        }
     }
 }
