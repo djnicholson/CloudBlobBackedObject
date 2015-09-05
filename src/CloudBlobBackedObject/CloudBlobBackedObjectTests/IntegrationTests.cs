@@ -173,7 +173,7 @@ namespace CloudBlobBackedObjectTests
             {
                 new CloudBlobBacked<string>(blob, leaseDuration: TimeSpan.FromMinutes(0.5));
             }
-            catch(InvalidOperationException)
+            catch (InvalidOperationException)
             {
             }
 
@@ -206,19 +206,17 @@ namespace CloudBlobBackedObjectTests
             var writer = new CloudBlobBacked<string>(
                 blob,
                 leaseDuration: lease,
-                writeToCloudFrequency: TimeSpan.FromSeconds(1.0));
+                writeToCloudFrequency: TimeSpan.FromSeconds(0.1));
 
             var reader = new CloudBlobBacked<string>(
                 blob,
-                readFromCloudFrequency: TimeSpan.FromSeconds(1.0));
+                readFromCloudFrequency: TimeSpan.FromSeconds(0.1));
 
             writer.Object = "Hello world!";
 
-            while (!writer.Object.Equals(reader.Object))
-            {
-                Trace.TraceInformation("waiting...");
-                Thread.Sleep(TimeSpan.FromSeconds(0.25));
-            }
+            Thread.Sleep(TimeSpan.FromSeconds(2.0));
+
+            Assert.AreEqual(writer.Object, reader.Object);
 
             reader.Shutdown();
             writer.Shutdown();
