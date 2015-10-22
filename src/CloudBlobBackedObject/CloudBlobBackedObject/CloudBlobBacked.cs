@@ -172,7 +172,7 @@ namespace CloudBlobBackedObject
             {
                 Thread t = this.blobReader;
                 this.blobReader = null;
-                t.Interrupt();
+                this.stopBlobReader.Set();
                 t.Join();
             }
 
@@ -180,7 +180,7 @@ namespace CloudBlobBackedObject
             {
                 Thread t = this.blobWriter;
                 this.blobWriter = null;
-                t.Interrupt();
+                this.stopBlobWriter.Set();
                 t.Join();
             }
 
@@ -188,7 +188,7 @@ namespace CloudBlobBackedObject
             {
                 Thread t = this.leaseRenewer;
                 this.leaseRenewer = null;
-                t.Interrupt();
+                this.stopLeaseRenewer.Set();
                 t.Join();
             }
         }
@@ -225,18 +225,12 @@ namespace CloudBlobBackedObject
             {
                 while (this.leaseRenewer != null)
                 {
-                    try
-                    {
-                        // Renew lease MinimumLeaseInSeconds before it expires:
-                        Thread.Sleep(leaseDuration - TimeSpan.FromSeconds(MinimumLeaseInSeconds));
+                    // Renew lease MinimumLeaseInSeconds before it expires:
+                    stopLeaseRenewer.WaitOne(leaseDuration - TimeSpan.FromSeconds(MinimumLeaseInSeconds));
 
-                        lock (this.writeAccessCondition)
-                        {
-                            this.backingBlob.RenewLease(this.writeAccessCondition);
-                        }
-                    }
-                    catch (ThreadInterruptedException)
+                    lock (this.writeAccessCondition)
                     {
+                        this.backingBlob.RenewLease(this.writeAccessCondition);
                     }
                 }
 
@@ -255,14 +249,7 @@ namespace CloudBlobBackedObject
             {
                 while (this.blobWriter != null)
                 {
-                    try
-                    {
-                        Thread.Sleep(writeToCloudFrequency);
-                    }
-                    catch (ThreadInterruptedException)
-                    {
-                    }
-
+                    stopBlobWriter.WaitOne(writeToCloudFrequency);
                     SaveDataToCloudBlob();
                 }
             });
@@ -279,14 +266,8 @@ namespace CloudBlobBackedObject
             {
                 while (this.blobReader != null)
                 {
-                    try
-                    {
-                        Thread.Sleep(readFromCloudFrequency);
-                        TryRefreshDataFromCloudBlob();
-                    }
-                    catch (ThreadInterruptedException)
-                    {
-                    }
+                    TryRefreshDataFromCloudBlob();
+                    stopBlobReader.WaitOne(readFromCloudFrequency);
                 }
             });
             this.blobReader.Start();
@@ -443,6 +424,10 @@ namespace CloudBlobBackedObject
         private Thread leaseRenewer;
         private Thread blobReader;
         private Thread blobWriter;
+
+        private ManualResetEvent stopLeaseRenewer = new ManualResetEvent(false);
+        private ManualResetEvent stopBlobReader = new ManualResetEvent(false);
+        private ManualResetEvent stopBlobWriter= new ManualResetEvent(false);
 
         private AccessCondition writeAccessCondition = new AccessCondition();
         private AccessCondition readAccessCondition = new AccessCondition();
