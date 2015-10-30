@@ -226,7 +226,7 @@ namespace CloudBlobBackedObject
                 while (this.leaseRenewer != null)
                 {
                     // Renew lease MinimumLeaseInSeconds before it expires:
-                    stopLeaseRenewer.WaitOne(leaseDuration - TimeSpan.FromSeconds(MinimumLeaseInSeconds));
+                    stopLeaseRenewer.WaitOne(leaseDuration - TimeSpan.FromSeconds(MinimumLeaseInSeconds - 1));
 
                     lock (this.writeAccessCondition)
                     {
