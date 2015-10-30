@@ -339,7 +339,7 @@ namespace CloudBlobBackedObject
             return exists;
         }
 
-        private bool SaveDataToCloudBlob()
+        private void SaveDataToCloudBlob()
         {
             lock (this.writeAccessCondition)
             lock (this.syncRoot)
@@ -349,26 +349,38 @@ namespace CloudBlobBackedObject
 
                     if (ArrayEquals(buffer, this.lastKnownBlobContents))
                     {
-                        return true;
+                        return;
                     }
+
+                    OperationContext context = new OperationContext();
 
                     try
                     {
-                        OperationContext context = new OperationContext();
-                        this.backingBlob.UploadFromByteArray(buffer, 0, buffer.Length, accessCondition: this.writeAccessCondition, operationContext: context);
-                        this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
-                        this.lastKnownBlobContents = buffer;
-                        return true;
+                        this.backingBlob.UploadFromByteArray(
+                            buffer,
+                            0,
+                            buffer.Length,
+                            accessCondition: this.writeAccessCondition,
+                            operationContext: context);
                     }
                     catch (StorageException e)
                     {
-                        if (HttpStatusCode(e) != 412) // Someone else has the lease
+                        if (HttpStatusCode(e) == 412) // Lease no longer valid; try again with no lease
+                        {
+                            this.backingBlob.UploadFromByteArray(
+                                buffer,
+                                0,
+                                buffer.Length,
+                                operationContext: context);
+                        }
+                        else
                         {
                             throw;
                         }
-
-                        return false;
                     }
+
+                    this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
+                    this.lastKnownBlobContents = buffer;
                 }
         }
 
