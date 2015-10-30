@@ -223,10 +223,11 @@ namespace CloudBlobBackedObject
         {
             this.leaseRenewer = (new Thread(() =>
             {
-                while (this.leaseRenewer != null)
+                bool stop = false;
+                while (!stop)
                 {
                     // Renew lease MinimumLeaseInSeconds before it expires:
-                    stopLeaseRenewer.WaitOne(leaseDuration - TimeSpan.FromSeconds(MinimumLeaseInSeconds - 1));
+                    stop = stopLeaseRenewer.WaitOne(leaseDuration - TimeSpan.FromSeconds(MinimumLeaseInSeconds - 1));
 
                     lock (this.writeAccessCondition)
                     {
@@ -247,9 +248,10 @@ namespace CloudBlobBackedObject
         {
             this.blobWriter = new Thread(() =>
             {
-                while (this.blobWriter != null)
+                bool stop = false;
+                while (!stop)
                 {
-                    stopBlobWriter.WaitOne(writeToCloudFrequency);
+                    stop = stopBlobWriter.WaitOne(writeToCloudFrequency);
                     SaveDataToCloudBlob();
                 }
             });
@@ -264,10 +266,11 @@ namespace CloudBlobBackedObject
         {
             this.blobReader = new Thread(() =>
             {
-                while (this.blobReader != null)
+                bool stop = false;
+                while (!stop)
                 {
                     TryRefreshDataFromCloudBlob();
-                    stopBlobReader.WaitOne(readFromCloudFrequency);
+                    stop = stopBlobReader.WaitOne(readFromCloudFrequency);
                 }
             });
             this.blobReader.Start();
@@ -340,33 +343,33 @@ namespace CloudBlobBackedObject
         {
             lock (this.writeAccessCondition)
             lock (this.syncRoot)
-            {
-                byte[] buffer = SerializeToBytes(this.localObject);
+                {
+                    byte[] buffer = SerializeToBytes(this.localObject);
 
 
-                if (ArrayEquals(buffer, this.lastKnownBlobContents))
-                {
-                    return true;
-                }
-
-                try
-                {
-                    OperationContext context = new OperationContext();
-                    this.backingBlob.UploadFromByteArray(buffer, 0, buffer.Length, accessCondition: this.writeAccessCondition, operationContext: context);
-                    this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
-                    this.lastKnownBlobContents = buffer;
-                    return true;
-                }
-                catch (StorageException e)
-                {
-                    if (HttpStatusCode(e) != 412) // Someone else has the lease
+                    if (ArrayEquals(buffer, this.lastKnownBlobContents))
                     {
-                        throw;
+                        return true;
                     }
 
-                    return false;
+                    try
+                    {
+                        OperationContext context = new OperationContext();
+                        this.backingBlob.UploadFromByteArray(buffer, 0, buffer.Length, accessCondition: this.writeAccessCondition, operationContext: context);
+                        this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
+                        this.lastKnownBlobContents = buffer;
+                        return true;
+                    }
+                    catch (StorageException e)
+                    {
+                        if (HttpStatusCode(e) != 412) // Someone else has the lease
+                        {
+                            throw;
+                        }
+
+                        return false;
+                    }
                 }
-            }
         }
 
         private static bool ArrayEquals(byte[] xs, byte[] ys)
@@ -427,7 +430,7 @@ namespace CloudBlobBackedObject
 
         private ManualResetEvent stopLeaseRenewer = new ManualResetEvent(false);
         private ManualResetEvent stopBlobReader = new ManualResetEvent(false);
-        private ManualResetEvent stopBlobWriter= new ManualResetEvent(false);
+        private ManualResetEvent stopBlobWriter = new ManualResetEvent(false);
 
         private AccessCondition writeAccessCondition = new AccessCondition();
         private AccessCondition readAccessCondition = new AccessCondition();
