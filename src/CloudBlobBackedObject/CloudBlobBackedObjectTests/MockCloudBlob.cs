@@ -839,6 +839,11 @@ namespace CloudBlobBackedObjectTests
             throw new NotImplementedException();
         }
 
+        public string GetSharedAccessSignature(SharedAccessBlobPolicy policy, SharedAccessBlobHeaders headers, string groupPolicyIdentifier, SharedAccessProtocol? protocols, IPAddressOrRange ipAddressOrRange)
+        {
+            throw new NotImplementedException();
+        }
+
         public Stream OpenRead(AccessCondition accessCondition = null, BlobRequestOptions options = null, OperationContext operationContext = null)
         {
             throw new NotImplementedException();

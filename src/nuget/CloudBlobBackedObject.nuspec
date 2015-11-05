@@ -2,13 +2,13 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
     <metadata>
         <id>CloudBlobBackedObject</id>
-        <version>1.0.12</version>
+        <version>1.1.0</version>
         <authors>David Nicholson</authors>
         <requireLicenseAcceptance>false</requireLicenseAcceptance>
         <description>Generic CloudBlobBacked&lt;T&gt; class that allows arbitrary serializable objects to be shared between processes using Azure Blob Storage.</description>
         <dependencies>
             <group targetFramework=".NETFramework4.5">
-                <dependency id="WindowsAzure.Storage" version="5.0.0" />
+                <dependency id="WindowsAzure.Storage" version="6.1.0" />
             </group>
         </dependencies>
         <references>
