@@ -289,7 +289,17 @@ namespace CloudBlobBackedObject
                 while (!stop)
                 {
                     stop = stopBlobWriter.WaitOne(writeToCloudFrequency);
-                    SaveDataToCloudBlob();
+                    int attempts = 1;
+                    while (!SaveDataToCloudBlob())
+                    {
+                        attempts++;
+                        if (attempts == 10)
+                        {
+                            throw new InvalidOperationException(
+                                "The lease was lost on the underlying blob and could not be reobtained. Data may have been lost.");
+                        }
+                        stopBlobWriter.WaitOne(writeToCloudFrequency);
+                    }
                 }
             });
             this.blobWriter.Start();
@@ -376,7 +386,7 @@ namespace CloudBlobBackedObject
             return exists;
         }
 
-        private void SaveDataToCloudBlob()
+        private bool SaveDataToCloudBlob()
         {
             lock (this.writeAccessCondition)
             lock (this.syncRoot)
@@ -386,40 +396,29 @@ namespace CloudBlobBackedObject
 
                     if (ArrayEquals(buffer, this.lastKnownBlobContents))
                     {
-                        return;
+                        return true;
                     }
 
                     OperationContext context = new OperationContext();
 
-                    int attempts = 0;
-                    bool success = false;
-                    while (!success)
+                    try
                     {
-                        attempts++;
-                        try
-                        {
-
-                            this.backingBlob.UploadFromByteArray(
-                                buffer,
-                                0,
-                                buffer.Length,
-                                accessCondition: this.writeAccessCondition,
-                                operationContext: context);
-                            success = true;
-                        }
-                        catch (StorageException e)
-                        {
-                            // lease no longer valid (and the lease renewer thread has been unable to rectify)
-                            if (attempts == 5 || HttpStatusCode(e) != 412)
-                            {
-                                throw;
-                            }
-                            Thread.Sleep(TimeSpan.FromSeconds(0.5));
-                        }
+                        this.backingBlob.UploadFromByteArray(
+                            buffer,
+                            0,
+                            buffer.Length,
+                            accessCondition: this.writeAccessCondition,
+                            operationContext: context);
+                    }
+                    catch (StorageException)
+                    {
+                        // lease no longer valid (and the lease renewer thread has been unable to rectify)
+                        return false;
                     }
 
                     this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
                     this.lastKnownBlobContents = buffer;
+                    return true;
                 }
         }
 
