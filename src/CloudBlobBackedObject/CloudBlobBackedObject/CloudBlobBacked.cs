@@ -5,6 +5,7 @@ using System;
 using System.IO;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
+using System.Security.Cryptography;
 using System.Threading;
 
 namespace CloudBlobBackedObject
@@ -367,7 +368,7 @@ namespace CloudBlobBackedObject
                     this.localObject = temp;
                     if (exists)
                     {
-                        this.lastKnownBlobContents = currentBlobContents.ToArray();
+                        this.lastKnownBlobContentsHash = Hash(currentBlobContents.ToArray());
                         if (this.OnUpdate != null)
                         {
                             this.OnUpdate(this, EventArgs.Empty);
@@ -393,8 +394,7 @@ namespace CloudBlobBackedObject
                 {
                     byte[] buffer = SerializeToBytes(this.localObject);
 
-
-                    if (ArrayEquals(buffer, this.lastKnownBlobContents))
+                    if (ArrayEquals(Hash(buffer), this.lastKnownBlobContentsHash))
                     {
                         return true;
                     }
@@ -417,9 +417,17 @@ namespace CloudBlobBackedObject
                     }
 
                     this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
-                    this.lastKnownBlobContents = buffer;
+                    this.lastKnownBlobContentsHash = Hash(buffer);
                     return true;
                 }
+        }
+
+        private byte[] Hash(byte[] buffer)
+        {
+            using (SHA256 hasher = SHA256Managed.Create())
+            {
+                return hasher.TransformFinalBlock(buffer, 0, buffer.Length);
+            }
         }
 
         private static bool ArrayEquals(byte[] xs, byte[] ys)
@@ -487,7 +495,7 @@ namespace CloudBlobBackedObject
 
         private ICloudBlob backingBlob;
         private T localObject;
-        private byte[] lastKnownBlobContents;
+        private byte[] lastKnownBlobContentsHash;
         private Object syncRoot = new Object();
     }
 }
