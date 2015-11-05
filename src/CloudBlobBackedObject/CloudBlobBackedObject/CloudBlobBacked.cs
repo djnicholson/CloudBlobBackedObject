@@ -28,6 +28,13 @@ namespace CloudBlobBackedObject
         public const int MinimumLeaseInSeconds = 20;
 
         /// <summary>
+        /// How often the lease is refreshed.  The lower this value is, the less likely we are
+        /// to lose the lease due to slowdown of the renewal thread, but the more "chatty" we are
+        /// to the storage service.
+        /// </summary>
+        public const int LeaseRenewalIntervalInSeconds = 5;
+
+        /// <summary>
         /// Create a wrapper around an object that is backed in Azure Blob Storage.
         /// </summary>
         /// <param name="backingBlob">
@@ -199,6 +206,12 @@ namespace CloudBlobBackedObject
         /// </summary>
         private void TryAquireLeaseAndRefresh(TimeSpan leaseDuration)
         {
+            AcquireNewLease(leaseDuration);
+            StartLeaseRenewer(leaseDuration);
+        }
+
+        private void AcquireNewLease(TimeSpan leaseDuration)
+        {
             try
             {
                 this.writeAccessCondition.LeaseId = this.backingBlob.AcquireLease(leaseDuration, proposedLeaseId: null);
@@ -207,12 +220,10 @@ namespace CloudBlobBackedObject
             {
                 if (HttpStatusCode(e) == 409) // Conflict
                 {
-                    throw new InvalidOperationException("The lease for this blob is already taken", e);
+                    throw new InvalidOperationException("The lease for this blob has been taken by another client", e);
                 }
                 throw;
             }
-
-            StartLeaseRenewer(leaseDuration);
         }
 
         /// <summary>
@@ -227,15 +238,41 @@ namespace CloudBlobBackedObject
                 while (!stop)
                 {
                     // Renew lease MinimumLeaseInSeconds before it expires:
-                    stop = stopLeaseRenewer.WaitOne(leaseDuration - TimeSpan.FromSeconds(MinimumLeaseInSeconds - 1));
+                    stop = stopLeaseRenewer.WaitOne(TimeSpan.FromSeconds(LeaseRenewalIntervalInSeconds));
 
                     lock (this.writeAccessCondition)
                     {
-                        this.backingBlob.RenewLease(this.writeAccessCondition);
+                        try
+                        {
+                            this.backingBlob.RenewLease(this.writeAccessCondition);
+                        }
+                        catch (StorageException e)
+                        {
+                            if (HttpStatusCode(e) != 409) // Lost our original lease (maybe due to this thread sleeping for too long)
+                            {
+                                AcquireNewLease(leaseDuration);
+                            }
+                            else
+                            {
+                                throw;
+                            }
+                        }
                     }
                 }
 
-                this.backingBlob.ReleaseLease(this.writeAccessCondition);
+                try
+                {
+                    this.backingBlob.ReleaseLease(this.writeAccessCondition);
+                }
+                catch (StorageException e)
+                {
+                    // Maybe we didn't have the lease anyway? Ooh well, we're shutting down anyway
+                    if (HttpStatusCode(e) != 409)
+                    {
+                        throw;
+                    }
+                }
+
             }));
             this.leaseRenewer.Start();
         }
