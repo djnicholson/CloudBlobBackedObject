@@ -391,28 +391,30 @@ namespace CloudBlobBackedObject
 
                     OperationContext context = new OperationContext();
 
-                    try
+                    int attempts = 0;
+                    bool success = false;
+                    while (!success)
                     {
-                        this.backingBlob.UploadFromByteArray(
-                            buffer,
-                            0,
-                            buffer.Length,
-                            accessCondition: this.writeAccessCondition,
-                            operationContext: context);
-                    }
-                    catch (StorageException e)
-                    {
-                        if (HttpStatusCode(e) == 412) // Lease no longer valid; try again with no lease
+                        attempts++;
+                        try
                         {
+
                             this.backingBlob.UploadFromByteArray(
                                 buffer,
                                 0,
                                 buffer.Length,
+                                accessCondition: this.writeAccessCondition,
                                 operationContext: context);
+                            success = true;
                         }
-                        else
+                        catch (StorageException e)
                         {
-                            throw;
+                            // lease no longer valid (and the lease renewer thread has been unable to rectify)
+                            if (attempts == 5 || HttpStatusCode(e) != 412)
+                            {
+                                throw;
+                            }
+                            Thread.Sleep(TimeSpan.FromSeconds(0.5));
                         }
                     }
 
