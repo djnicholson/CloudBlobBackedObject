@@ -241,23 +241,27 @@ namespace CloudBlobBackedObject
                     // Renew lease MinimumLeaseInSeconds before it expires:
                     stop = stopLeaseRenewer.WaitOne(TimeSpan.FromSeconds(LeaseRenewalIntervalInSeconds));
 
+
+                    AccessCondition newWriteAccessCondition = new AccessCondition();
+                    try
+                    {
+                        this.backingBlob.RenewLease(newWriteAccessCondition);
+                    }
+                    catch (StorageException e)
+                    {
+                        if (HttpStatusCode(e) != 409) // Lost our original lease (maybe due to this thread sleeping for too long)
+                        {
+                            AcquireNewLease(leaseDuration);
+                        }
+                        else
+                        {
+                            throw;
+                        }
+                    }
+
                     lock (this.writeAccessCondition)
                     {
-                        try
-                        {
-                            this.backingBlob.RenewLease(this.writeAccessCondition);
-                        }
-                        catch (StorageException e)
-                        {
-                            if (HttpStatusCode(e) != 409) // Lost our original lease (maybe due to this thread sleeping for too long)
-                            {
-                                AcquireNewLease(leaseDuration);
-                            }
-                            else
-                            {
-                                throw;
-                            }
-                        }
+                        this.writeAccessCondition.LeaseId = newWriteAccessCondition.LeaseId;
                     }
                 }
 
@@ -389,37 +393,41 @@ namespace CloudBlobBackedObject
 
         private bool SaveDataToCloudBlob()
         {
+            AccessCondition writeAccessConditionCopy = new AccessCondition();
             lock (this.writeAccessCondition)
+            {
+                writeAccessConditionCopy.LeaseId = this.writeAccessCondition.LeaseId;
+            }
             lock (this.syncRoot)
+            {
+                byte[] buffer = SerializeToBytes(this.localObject);
+
+                if (ArrayEquals(Hash(buffer), this.lastKnownBlobContentsHash))
                 {
-                    byte[] buffer = SerializeToBytes(this.localObject);
-
-                    if (ArrayEquals(Hash(buffer), this.lastKnownBlobContentsHash))
-                    {
-                        return true;
-                    }
-
-                    OperationContext context = new OperationContext();
-
-                    try
-                    {
-                        this.backingBlob.UploadFromByteArray(
-                            buffer,
-                            0,
-                            buffer.Length,
-                            accessCondition: this.writeAccessCondition,
-                            operationContext: context);
-                    }
-                    catch (StorageException)
-                    {
-                        // lease no longer valid (and the lease renewer thread has been unable to rectify)
-                        return false;
-                    }
-
-                    this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
-                    this.lastKnownBlobContentsHash = Hash(buffer);
                     return true;
                 }
+
+                OperationContext context = new OperationContext();
+
+                try
+                {
+                    this.backingBlob.UploadFromByteArray(
+                        buffer,
+                        0,
+                        buffer.Length,
+                        accessCondition: writeAccessConditionCopy,
+                        operationContext: context);
+                }
+                catch (StorageException)
+                {
+                    // lease no longer valid (and the lease renewer thread has been unable to rectify)
+                    return false;
+                }
+
+                this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
+                this.lastKnownBlobContentsHash = Hash(buffer);
+                return true;
+            }
         }
 
         private byte[] Hash(byte[] buffer)
