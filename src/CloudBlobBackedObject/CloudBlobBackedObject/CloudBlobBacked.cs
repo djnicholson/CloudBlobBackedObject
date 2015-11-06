@@ -241,27 +241,23 @@ namespace CloudBlobBackedObject
                     // Renew lease MinimumLeaseInSeconds before it expires:
                     stop = stopLeaseRenewer.WaitOne(TimeSpan.FromSeconds(LeaseRenewalIntervalInSeconds));
 
-
-                    AccessCondition newWriteAccessCondition = new AccessCondition();
-                    try
-                    {
-                        this.backingBlob.RenewLease(newWriteAccessCondition);
-                    }
-                    catch (StorageException e)
-                    {
-                        if (HttpStatusCode(e) != 409) // Lost our original lease (maybe due to this thread sleeping for too long)
-                        {
-                            AcquireNewLease(leaseDuration);
-                        }
-                        else
-                        {
-                            throw;
-                        }
-                    }
-
                     lock (this.writeAccessCondition)
                     {
-                        this.writeAccessCondition.LeaseId = newWriteAccessCondition.LeaseId;
+                        try
+                        {
+                            this.backingBlob.RenewLease(this.writeAccessCondition);
+                        }
+                        catch (StorageException e)
+                        {
+                            if (HttpStatusCode(e) != 409) // Lost our original lease (maybe due to this thread sleeping for too long)
+                            {
+                                AcquireNewLease(leaseDuration);
+                            }
+                            else
+                            {
+                                throw;
+                            }
+                        }
                     }
                 }
 
