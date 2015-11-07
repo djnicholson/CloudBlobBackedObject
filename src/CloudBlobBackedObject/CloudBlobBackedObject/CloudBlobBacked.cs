@@ -214,8 +214,14 @@ namespace CloudBlobBackedObject
         private void AcquireNewLease(TimeSpan leaseDuration)
         {
             TryStorageOperation(
-                () => { this.writeAccessCondition.LeaseId = this.backingBlob.AcquireLease(leaseDuration, proposedLeaseId: null); },
-                catchHttp409: e => { throw new InvalidOperationException("The lease for this blob has been taken by another client", e); });
+                () =>
+                {
+                    this.writeAccessCondition.LeaseId = this.backingBlob.AcquireLease(leaseDuration, proposedLeaseId: null);
+                },
+                catchHttp409: e => 
+                {
+                    throw new InvalidOperationException("The lease for this blob has been taken by another client", e);
+                });
             
         }
 
@@ -311,61 +317,42 @@ namespace CloudBlobBackedObject
         {
             bool exists = true;
 
-            try
-            {
-                T temp = default(T);
-
-                MemoryStream currentBlobContents = new MemoryStream();
-
-                lock (this.syncRoot)
+            TryStorageOperation(
+                () =>
                 {
-                    try
-                    {
-                        OperationContext context = new OperationContext();
-                        this.backingBlob.DownloadToStream(currentBlobContents, accessCondition: this.readAccessCondition, operationContext: context);
-                        this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
+                    T temp = default(T);
+                    MemoryStream currentBlobContents = new MemoryStream();
+                    OperationContext context = new OperationContext();
 
-                        if (currentBlobContents.Length != 0)
-                        {
-                            currentBlobContents.Seek(0, SeekOrigin.Begin);
-                            BinaryFormatter formatter = new BinaryFormatter();
-                            try
+                    lock (this.syncRoot)
+                    {
+                        TryStorageOperation(
+                            () =>
                             {
-                                temp = (T)formatter.Deserialize(currentBlobContents);
-                            }
-                            catch (SerializationException)
+                                this.backingBlob.DownloadToStream(currentBlobContents, accessCondition: this.readAccessCondition, operationContext: context);
+                                this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
+                                exists = DeserializeInto(ref temp, currentBlobContents);
+                            },
+                            catchHttp404: e =>
                             {
                                 exists = false;
+                            });
+
+                        this.localObject = temp;
+
+                        if (exists)
+                        {
+                            this.lastKnownBlobContentsHash = Hash(currentBlobContents.ToArray());
+
+                            if (this.OnUpdate != null)
+                            {
+                                this.OnUpdate(this, EventArgs.Empty);
                             }
                         }
                     }
-                    catch (StorageException e)
-                    {
-                        if (HttpStatusCode(e) != 404) // Not found
-                        {
-                            throw;
-                        }
-                        exists = false;
-                    }
-
-                    this.localObject = temp;
-                    if (exists)
-                    {
-                        this.lastKnownBlobContentsHash = Hash(currentBlobContents.ToArray());
-                        if (this.OnUpdate != null)
-                        {
-                            this.OnUpdate(this, EventArgs.Empty);
-                        }
-                    }
-                }
-            }
-            catch (StorageException e)
-            {
-                if (HttpStatusCode(e) != 304 && HttpStatusCode(e) != 412) // Not modified since last retrieval
-                {
-                    throw;
-                }
-            }
+                },
+                catchHttp304: e => { },
+                catchHttp412: e => { });
 
             return exists;
         }
@@ -379,7 +366,7 @@ namespace CloudBlobBackedObject
             }
             lock (this.syncRoot)
             {
-                byte[] buffer = SerializeToBytes(this.localObject);
+                byte[] buffer = Serialize(this.localObject);
 
                 if (ArrayEquals(Hash(buffer), this.lastKnownBlobContentsHash))
                 {
@@ -445,7 +432,7 @@ namespace CloudBlobBackedObject
             return true;
         }
 
-        private static byte[] SerializeToBytes(Object obj)
+        private static byte[] Serialize(Object obj)
         {
             if (obj == null)
             {
@@ -460,9 +447,31 @@ namespace CloudBlobBackedObject
             }
         }
 
+        private static bool DeserializeInto(ref T target, Stream serializedObject)
+        {
+            if (serializedObject.Length != 0)
+            {
+                serializedObject.Seek(0, SeekOrigin.Begin);
+                BinaryFormatter formatter = new BinaryFormatter();
+                try
+                {
+                    target = (T)formatter.Deserialize(serializedObject);
+                }
+                catch (SerializationException)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         private static void TryStorageOperation(
-            Action operation, 
-            Action<StorageException> catchHttp409 = null)
+            Action operation,
+            Action<StorageException> catchHttp304 = null,
+            Action<StorageException> catchHttp404 = null,
+            Action<StorageException> catchHttp409 = null,
+            Action<StorageException> catchHttp412 = null)
         {
             try
             {
@@ -470,9 +479,22 @@ namespace CloudBlobBackedObject
             }
             catch (StorageException e)
             {
-                if (catchHttp409 != null && HttpStatusCode(e) == 409) // Conflict
+                int httpStatus = HttpStatusCode(e);
+                if (catchHttp304 != null && httpStatus == 304)
+                {
+                    catchHttp304(e);
+                }
+                else if (catchHttp404 != null && httpStatus == 404)
+                {
+                    catchHttp404(e);
+                }
+                else if (catchHttp409 != null && httpStatus == 409)
                 {
                     catchHttp409(e);
+                }
+                else if (catchHttp412 != null && httpStatus == 412)
+                {
+                    catchHttp412(e);
                 }
                 else
                 {
