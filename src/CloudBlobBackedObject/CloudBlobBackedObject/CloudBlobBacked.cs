@@ -213,18 +213,10 @@ namespace CloudBlobBackedObject
 
         private void AcquireNewLease(TimeSpan leaseDuration)
         {
-            try
-            {
-                this.writeAccessCondition.LeaseId = this.backingBlob.AcquireLease(leaseDuration, proposedLeaseId: null);
-            }
-            catch (StorageException e)
-            {
-                if (HttpStatusCode(e) == 409) // Conflict
-                {
-                    throw new InvalidOperationException("The lease for this blob has been taken by another client", e);
-                }
-                throw;
-            }
+            TryStorageOperation(
+                () => { this.writeAccessCondition.LeaseId = this.backingBlob.AcquireLease(leaseDuration, proposedLeaseId: null); },
+                catchHttp409: e => { throw new InvalidOperationException("The lease for this blob has been taken by another client", e); });
+            
         }
 
         /// <summary>
@@ -243,37 +235,28 @@ namespace CloudBlobBackedObject
 
                     lock (this.writeAccessCondition)
                     {
-                        try
-                        {
-                            this.backingBlob.RenewLease(this.writeAccessCondition);
-                        }
-                        catch (StorageException e)
-                        {
-                            if (HttpStatusCode(e) != 409) // Lost our original lease (maybe due to this thread sleeping for too long)
+                        TryStorageOperation(
+                            () => 
                             {
+                                this.backingBlob.RenewLease(this.writeAccessCondition);
+                            },
+                            catchHttp409: e =>
+                            {
+                                // Lost our original lease (maybe due to this thread sleeping for an extremely long time)
                                 AcquireNewLease(leaseDuration);
-                            }
-                            else
-                            {
-                                throw;
-                            }
-                        }
+                            });
                     }
                 }
 
-                try
-                {
-                    this.backingBlob.ReleaseLease(this.writeAccessCondition);
-                }
-                catch (StorageException e)
-                {
-                    // Maybe we didn't have the lease anyway? Ooh well, we're shutting down anyway
-                    if (HttpStatusCode(e) != 409)
+                TryStorageOperation(
+                    () =>
                     {
-                        throw;
-                    }
-                }
-
+                        this.backingBlob.ReleaseLease(this.writeAccessCondition);
+                    },
+                    catchHttp409: e =>
+                    {
+                        // Maybe we didn't have the lease anyway? Ooh well, we're shutting down anyway (absorb this error)
+                    });
             }));
             this.leaseRenewer.Start();
         }
@@ -474,6 +457,27 @@ namespace CloudBlobBackedObject
                 MemoryStream memory = new MemoryStream();
                 formatter.Serialize(memory, obj);
                 return memory.GetBuffer();
+            }
+        }
+
+        private static void TryStorageOperation(
+            Action operation, 
+            Action<StorageException> catchHttp409 = null)
+        {
+            try
+            {
+                operation();
+            }
+            catch (StorageException e)
+            {
+                if (catchHttp409 != null && HttpStatusCode(e) == 409) // Conflict
+                {
+                    catchHttp409(e);
+                }
+                else
+                {
+                    throw;
+                }
             }
         }
 
