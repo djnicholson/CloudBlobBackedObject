@@ -3,7 +3,6 @@ using Microsoft.WindowsAzure.Storage.Blob;
 
 using System;
 using System.IO;
-using System.Security.Cryptography;
 using System.Threading;
 
 namespace CloudBlobBackedObject
@@ -73,22 +72,34 @@ namespace CloudBlobBackedObject
             TimeSpan? writeToCloudFrequency = null,
             TimeSpan? readFromCloudFrequency = null)
         {
-            if (leaseDuration.HasValue && (leaseDuration < TimeSpan.FromSeconds(MinimumLeaseInSeconds)))
-            {
-                throw new ArgumentException("Lease duration too short", "leaseDuration");
-            }
-
             this.backingBlob = backingBlob;
 
-            if (!TryRefreshDataFromCloudBlob())
+            bool leaseAcquired = false;
+            if (leaseDuration.HasValue)
+            {
+                if (leaseDuration < TimeSpan.FromSeconds(MinimumLeaseInSeconds))
+                {
+                    throw new ArgumentException("Lease duration too short", "leaseDuration");
+                }
+
+                leaseAcquired = AcquireLeaseIfBlobExists(leaseDuration.Value);
+            }
+
+            bool exists = TryRefreshDataFromCloudBlob();
+
+            if (!exists)
             {
                 WriteLocalDataToCloudIfNeeded();
             }
 
             if (leaseDuration.HasValue)
             {
-                TryAquireLeaseAndRefresh(leaseDuration.Value);
-                TryRefreshDataFromCloudBlob();
+                if (!leaseAcquired)
+                {
+                    AcquireLeaseForExistingBlob(leaseDuration.Value);
+                }
+
+                StartLeaseRenewer(leaseDuration.Value);
             }
 
             if (writeToCloudFrequency.HasValue)
@@ -199,17 +210,17 @@ namespace CloudBlobBackedObject
             }
         }
 
-        /// <summary>
-        /// Takes out a lease on a blob and starts a thread to keep it renewed.  Throws if the lease
-        /// cannot be obtained.
-        /// </summary>
-        private void TryAquireLeaseAndRefresh(TimeSpan leaseDuration)
+        private bool AcquireLeaseIfBlobExists(TimeSpan leaseDuration)
         {
-            AcquireNewLease(leaseDuration);
-            StartLeaseRenewer(leaseDuration);
+            bool exists = true;
+            StorageOperation.Try(
+                () => { AcquireLeaseForExistingBlob(leaseDuration); },
+                catchHttp404: e => { exists = false; }
+                );
+            return exists;
         }
 
-        private void AcquireNewLease(TimeSpan leaseDuration)
+        private void AcquireLeaseForExistingBlob(TimeSpan leaseDuration)
         {
             StorageOperation.Try(
                 () =>
@@ -252,7 +263,7 @@ namespace CloudBlobBackedObject
                             catchHttp409: e =>
                             {
                                 // Lost our original lease (maybe due to this thread sleeping for an extremely long time)
-                                AcquireNewLease(leaseDuration);
+                                AcquireLeaseForExistingBlob(leaseDuration);
                             });
                     }
                 }
@@ -260,7 +271,10 @@ namespace CloudBlobBackedObject
                 StorageOperation.Try(
                     () =>
                     {
-                        this.backingBlob.ReleaseLease(this.writeAccessCondition);
+                        lock (this.writeAccessCondition)
+                        {
+                            this.backingBlob.ReleaseLease(this.writeAccessCondition);
+                        }
                     },
                     catchHttp409: e =>
                     {
@@ -362,12 +376,18 @@ namespace CloudBlobBackedObject
                     return;
                 }
 
-                OperationContext context = new OperationContext();                
+                AccessCondition writeAccessConditionAtStartOfUpload = new AccessCondition();
+                lock (this.writeAccessCondition)
+                {
+                    writeAccessConditionAtStartOfUpload.LeaseId = this.writeAccessCondition.LeaseId;
+                }
+
+                OperationContext context = new OperationContext();
                 this.backingBlob.UploadFromByteArray(
                     buffer,
                     0,
                     buffer.Length,
-                    accessCondition: writeAccessCondition,
+                    accessCondition: writeAccessConditionAtStartOfUpload,
                     operationContext: context);
                 this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
                 this.lastKnownBlobContentsHash = Serialization.Hash(buffer);
