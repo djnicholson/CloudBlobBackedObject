@@ -50,32 +50,24 @@ namespace CloudBlobBackedObject
             }
         }
 
-        public static bool HashesAreEqual(byte[] xs, byte[] ys)
+        public static bool ModifiedSince(byte[] currentBuffer, byte[] lastKnownHash)
         {
-            if (xs == null)
+            byte[] currentHash = Hash(currentBuffer);
+
+            if (currentHash.Length != lastKnownHash.Length)
             {
-                return ys == null;
+                return true;
             }
 
-            if (ys == null)
+            for (int i = 0; i < currentHash.Length; i++)
             {
-                return xs == null;
-            }
-
-            if (xs.Length != ys.Length)
-            {
-                return false;
-            }
-
-            for (int i = 0; i < xs.Length; i++)
-            {
-                if (xs[i] != ys[i])
+                if (currentHash[i] != lastKnownHash[i])
                 {
-                    return false;
+                    return true;
                 }
             }
 
-            return true;
+            return false;
         }
     }
 }

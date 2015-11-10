@@ -351,7 +351,8 @@ namespace CloudBlobBackedObject
             {
                 byte[] buffer = Serialization.Serialize(this.localObject);
 
-                if (Serialization.HashesAreEqual(Serialization.Hash(buffer), this.lastKnownBlobContentsHash))
+                if (this.lastKnownBlobContentsHash != null &&
+                    !Serialization.ModifiedSince(buffer, this.lastKnownBlobContentsHash))
                 {
                     return;
                 }
