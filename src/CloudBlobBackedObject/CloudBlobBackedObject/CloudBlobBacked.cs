@@ -321,7 +321,7 @@ namespace CloudBlobBackedObject
                             {
                                 this.backingBlob.DownloadToStream(currentBlobContents, accessCondition: this.readAccessCondition, operationContext: context);
                                 this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
-                                exists = DeserializeInto(ref temp, currentBlobContents);
+                                exists = Serialization.DeserializeInto<T>(ref temp, currentBlobContents);
                             },
                             catchHttp404: e =>
                             {
@@ -351,7 +351,7 @@ namespace CloudBlobBackedObject
         {
             lock (this.syncRoot)
             {
-                byte[] buffer = Serialize(this.localObject);
+                byte[] buffer = Serialization.Serialize(this.localObject);
 
                 if (ArrayEquals(Hash(buffer), this.lastKnownBlobContentsHash))
                 {
@@ -398,40 +398,6 @@ namespace CloudBlobBackedObject
             for (int i = 0; i < xs.Length; i++)
             {
                 if (xs[i] != ys[i])
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        private static byte[] Serialize(Object obj)
-        {
-            if (obj == null)
-            {
-                return new byte[0];
-            }
-            else
-            {
-                BinaryFormatter formatter = new BinaryFormatter();
-                MemoryStream memory = new MemoryStream();
-                formatter.Serialize(memory, obj);
-                return memory.GetBuffer();
-            }
-        }
-
-        private static bool DeserializeInto(ref T target, Stream serializedObject)
-        {
-            if (serializedObject.Length != 0)
-            {
-                serializedObject.Seek(0, SeekOrigin.Begin);
-                BinaryFormatter formatter = new BinaryFormatter();
-                try
-                {
-                    target = (T)formatter.Deserialize(serializedObject);
-                }
-                catch (SerializationException)
                 {
                     return false;
                 }
