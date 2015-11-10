@@ -5,7 +5,7 @@ using System.Runtime.Serialization.Formatters.Binary;
 
 namespace CloudBlobBackedObject
 {
-    internal class Serialization
+    internal static class Serialization
     {
         public static byte[] Serialize(Object obj)
         {
