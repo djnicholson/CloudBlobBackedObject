@@ -330,7 +330,7 @@ namespace CloudBlobBackedObject
 
                         if (exists)
                         {
-                            this.lastKnownBlobContentsHash = Hash(currentBlobContents.ToArray());
+                            this.lastKnownBlobContentsHash = Serialization.Hash(currentBlobContents.ToArray());
 
                             if (this.OnUpdate != null)
                             {
@@ -351,7 +351,7 @@ namespace CloudBlobBackedObject
             {
                 byte[] buffer = Serialization.Serialize(this.localObject);
 
-                if (ArrayEquals(Hash(buffer), this.lastKnownBlobContentsHash))
+                if (Serialization.HashesAreEqual(Serialization.Hash(buffer), this.lastKnownBlobContentsHash))
                 {
                     return;
                 }
@@ -364,44 +364,8 @@ namespace CloudBlobBackedObject
                     accessCondition: writeAccessCondition,
                     operationContext: context);
                 this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
-                this.lastKnownBlobContentsHash = Hash(buffer);
+                this.lastKnownBlobContentsHash = Serialization.Hash(buffer);
             }
-        }
-
-        private byte[] Hash(byte[] buffer)
-        {
-            using (SHA256 hasher = SHA256Managed.Create())
-            {
-                return hasher.TransformFinalBlock(buffer, 0, buffer.Length);
-            }
-        }
-
-        private static bool ArrayEquals(byte[] xs, byte[] ys)
-        {
-            if (xs == null)
-            {
-                return ys == null;
-            }
-
-            if (ys == null)
-            {
-                return xs == null;
-            }
-
-            if (xs.Length != ys.Length)
-            {
-                return false;
-            }
-
-            for (int i = 0; i < xs.Length; i++)
-            {
-                if (xs[i] != ys[i])
-                {
-                    return false;
-                }
-            }
-
-            return true;
         }
 
         private Thread leaseRenewer;

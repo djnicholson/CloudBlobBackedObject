@@ -2,6 +2,7 @@
 using System.IO;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
+using System.Security.Cryptography;
 
 namespace CloudBlobBackedObject
 {
@@ -33,6 +34,42 @@ namespace CloudBlobBackedObject
                     target = (T)formatter.Deserialize(serializedObjectReader);
                 }
                 catch (SerializationException)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        public static byte[] Hash(byte[] buffer)
+        {
+            using (SHA256 hasher = SHA256Managed.Create())
+            {
+                return hasher.TransformFinalBlock(buffer, 0, buffer.Length);
+            }
+        }
+
+        public static bool HashesAreEqual(byte[] xs, byte[] ys)
+        {
+            if (xs == null)
+            {
+                return ys == null;
+            }
+
+            if (ys == null)
+            {
+                return xs == null;
+            }
+
+            if (xs.Length != ys.Length)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < xs.Length; i++)
+            {
+                if (xs[i] != ys[i])
                 {
                     return false;
                 }
