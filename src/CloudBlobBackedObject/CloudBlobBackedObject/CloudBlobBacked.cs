@@ -358,11 +358,6 @@ namespace CloudBlobBackedObject
 
         private bool SaveDataToCloudBlob()
         {
-            AccessCondition writeAccessConditionCopy = new AccessCondition();
-            lock (this.writeAccessCondition)
-            {
-                writeAccessConditionCopy.LeaseId = this.writeAccessCondition.LeaseId;
-            }
             lock (this.syncRoot)
             {
                 byte[] buffer = Serialize(this.localObject);
@@ -373,19 +368,17 @@ namespace CloudBlobBackedObject
                 }
 
                 OperationContext context = new OperationContext();
-
                 try
                 {
                     this.backingBlob.UploadFromByteArray(
                         buffer,
                         0,
                         buffer.Length,
-                        accessCondition: writeAccessConditionCopy,
+                        accessCondition: writeAccessCondition,
                         operationContext: context);
                 }
                 catch (StorageException)
                 {
-                    // lease no longer valid (and the lease renewer thread has been unable to rectify)
                     return false;
                 }
 
