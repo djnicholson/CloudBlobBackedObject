@@ -214,7 +214,10 @@ namespace CloudBlobBackedObject
             StorageOperation.Try(
                 () =>
                 {
-                    this.writeAccessCondition.LeaseId = this.backingBlob.AcquireLease(leaseDuration, proposedLeaseId: null);
+                    lock (this.writeAccessCondition)
+                    {
+                        this.writeAccessCondition.LeaseId = this.backingBlob.AcquireLease(leaseDuration, proposedLeaseId: null);
+                    }
                 },
                 catchHttp409: e => 
                 {
@@ -236,12 +239,15 @@ namespace CloudBlobBackedObject
                     // Renew lease MinimumLeaseInSeconds before it expires:
                     stop = stopLeaseRenewer.WaitOne(TimeSpan.FromSeconds(LeaseRenewalIntervalInSeconds));
 
-                    lock (this.writeAccessCondition)
+                    if (!stop)
                     {
                         StorageOperation.Try(
-                            () => 
+                            () =>
                             {
-                                this.backingBlob.RenewLease(this.writeAccessCondition);
+                                lock (this.writeAccessCondition)
+                                {
+                                    this.backingBlob.RenewLease(this.writeAccessCondition);
+                                }
                             },
                             catchHttp409: e =>
                             {
