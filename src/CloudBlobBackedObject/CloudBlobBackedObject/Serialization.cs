@@ -22,15 +22,15 @@ namespace CloudBlobBackedObject
             }
         }
 
-        public static bool DeserializeInto<T>(ref T target, Stream serializedObject)
+        public static bool DeserializeInto<T>(ref T target, Stream serializedObjectReader)
         {
-            if (serializedObject.Length != 0)
+            if (serializedObjectReader.Length != 0)
             {
-                serializedObject.Seek(0, SeekOrigin.Begin);
+                serializedObjectReader.Seek(0, SeekOrigin.Begin);
                 BinaryFormatter formatter = new BinaryFormatter();
                 try
                 {
-                    target = (T)formatter.Deserialize(serializedObject);
+                    target = (T)formatter.Deserialize(serializedObjectReader);
                 }
                 catch (SerializationException)
                 {
