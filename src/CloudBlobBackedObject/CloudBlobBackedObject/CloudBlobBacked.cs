@@ -268,7 +268,7 @@ namespace CloudBlobBackedObject
 
         /// <summary>
         /// Start a thread that writes the local state to the backing blob (if needed) at the given frequency,
-        /// and writes the local state one final time when the htread is aborted.
+        /// and writes the local state one final time when the thread is aborted.
         /// </summary>
         private void StartBlobWriter(TimeSpan writeToCloudFrequency)
         {
