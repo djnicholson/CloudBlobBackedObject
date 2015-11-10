@@ -222,7 +222,6 @@ namespace CloudBlobBackedObject
                 {
                     throw new InvalidOperationException("The lease for this blob has been taken by another client", e);
                 });
-            
         }
 
         /// <summary>
