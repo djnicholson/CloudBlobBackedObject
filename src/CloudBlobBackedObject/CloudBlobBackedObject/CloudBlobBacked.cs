@@ -84,7 +84,7 @@ namespace CloudBlobBackedObject
 
             if (!TryRefreshDataFromCloudBlob())
             {
-                SaveDataToCloudBlob();
+                WriteLocalDataToCloudIfNeeded();
             }
 
             if (leaseDuration.HasValue)
@@ -277,18 +277,9 @@ namespace CloudBlobBackedObject
                 bool stop = false;
                 while (!stop)
                 {
-                    stop = stopBlobWriter.WaitOne(writeToCloudFrequency);
-                    int attempts = 1;
-                    while (!SaveDataToCloudBlob())
-                    {
-                        attempts++;
-                        if (attempts == 10)
-                        {
-                            throw new InvalidOperationException(
-                                "The lease was lost on the underlying blob and could not be reobtained. Data may have been lost.");
-                        }
-                        stopBlobWriter.WaitOne(writeToCloudFrequency);
-                    }
+                    stopBlobWriter.WaitOne(writeToCloudFrequency);
+                    WriteLocalDataToCloudIfNeeded();
+                    stop = stopBlobWriter.WaitOne(0);
                 }
             });
             this.blobWriter.Start();
@@ -356,7 +347,7 @@ namespace CloudBlobBackedObject
             return exists;
         }
 
-        private bool SaveDataToCloudBlob()
+        private void WriteLocalDataToCloudIfNeeded()
         {
             lock (this.syncRoot)
             {
@@ -364,27 +355,18 @@ namespace CloudBlobBackedObject
 
                 if (ArrayEquals(Hash(buffer), this.lastKnownBlobContentsHash))
                 {
-                    return true;
+                    return;
                 }
 
-                OperationContext context = new OperationContext();
-                try
-                {
-                    this.backingBlob.UploadFromByteArray(
-                        buffer,
-                        0,
-                        buffer.Length,
-                        accessCondition: writeAccessCondition,
-                        operationContext: context);
-                }
-                catch (StorageException)
-                {
-                    return false;
-                }
-
+                OperationContext context = new OperationContext();                
+                this.backingBlob.UploadFromByteArray(
+                    buffer,
+                    0,
+                    buffer.Length,
+                    accessCondition: writeAccessCondition,
+                    operationContext: context);
                 this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
                 this.lastKnownBlobContentsHash = Hash(buffer);
-                return true;
             }
         }
 
