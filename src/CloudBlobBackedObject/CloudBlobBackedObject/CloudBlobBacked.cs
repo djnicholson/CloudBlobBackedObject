@@ -211,7 +211,7 @@ namespace CloudBlobBackedObject
 
         private void AcquireNewLease(TimeSpan leaseDuration)
         {
-            TryStorageOperation(
+            StorageOperation.Try(
                 () =>
                 {
                     this.writeAccessCondition.LeaseId = this.backingBlob.AcquireLease(leaseDuration, proposedLeaseId: null);
@@ -238,7 +238,7 @@ namespace CloudBlobBackedObject
 
                     lock (this.writeAccessCondition)
                     {
-                        TryStorageOperation(
+                        StorageOperation.Try(
                             () => 
                             {
                                 this.backingBlob.RenewLease(this.writeAccessCondition);
@@ -251,7 +251,7 @@ namespace CloudBlobBackedObject
                     }
                 }
 
-                TryStorageOperation(
+                StorageOperation.Try(
                     () =>
                     {
                         this.backingBlob.ReleaseLease(this.writeAccessCondition);
@@ -305,7 +305,7 @@ namespace CloudBlobBackedObject
         {
             bool exists = true;
 
-            TryStorageOperation(
+            StorageOperation.Try(
                 () =>
                 {
                     T temp = default(T);
@@ -314,7 +314,7 @@ namespace CloudBlobBackedObject
 
                     lock (this.syncRoot)
                     {
-                        TryStorageOperation(
+                        StorageOperation.Try(
                             () =>
                             {
                                 this.backingBlob.DownloadToStream(currentBlobContents, accessCondition: this.readAccessCondition, operationContext: context);
@@ -402,52 +402,6 @@ namespace CloudBlobBackedObject
             }
 
             return true;
-        }
-
-        private static void TryStorageOperation(
-            Action operation,
-            Action<StorageException> catchHttp304 = null,
-            Action<StorageException> catchHttp404 = null,
-            Action<StorageException> catchHttp409 = null,
-            Action<StorageException> catchHttp412 = null)
-        {
-            try
-            {
-                operation();
-            }
-            catch (StorageException e)
-            {
-                int httpStatus = HttpStatusCode(e);
-                if (catchHttp304 != null && httpStatus == 304)
-                {
-                    catchHttp304(e);
-                }
-                else if (catchHttp404 != null && httpStatus == 404)
-                {
-                    catchHttp404(e);
-                }
-                else if (catchHttp409 != null && httpStatus == 409)
-                {
-                    catchHttp409(e);
-                }
-                else if (catchHttp412 != null && httpStatus == 412)
-                {
-                    catchHttp412(e);
-                }
-                else
-                {
-                    throw;
-                }
-            }
-        }
-
-        private static int HttpStatusCode(StorageException e)
-        {
-            if (e == null || e.RequestInformation == null)
-            {
-                return 0;
-            }
-            return e.RequestInformation.HttpStatusCode;
         }
 
         private Thread leaseRenewer;
