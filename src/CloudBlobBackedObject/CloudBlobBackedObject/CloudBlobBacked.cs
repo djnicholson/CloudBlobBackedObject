@@ -275,9 +275,8 @@ namespace CloudBlobBackedObject
                 bool stop = false;
                 while (!stop)
                 {
-                    stopBlobWriter.WaitOne(writeToCloudFrequency);
                     WriteLocalDataToCloudIfNeeded();
-                    stop = stopBlobWriter.WaitOne(0);
+                    stop = stopBlobWriter.WaitOne(writeToCloudFrequency);
                 }
             });
             this.blobWriter.Start();
