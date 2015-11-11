@@ -426,6 +426,8 @@ namespace CloudBlobBackedObject
                 this.exception = null;
                 this.thread = new Thread(() =>
                 {
+                    ThrowBackgroundException();
+
                     try
                     {
                         code();
@@ -447,14 +449,36 @@ namespace CloudBlobBackedObject
 
             public void Join()
             {
-                if (this.exception != null)
+                this.thread.Join();
+
+                ThrowBackgroundException();
+            }
+
+            ~MarshalledExceptionsThread()
+            {
+                ThrowBackgroundException();
+            }
+
+            private void ThrowBackgroundException()
+            {
+                if (this.exception == null)
                 {
-                    throw new AggregateException(
-                        "An exception was thrown by a background thread, state may be invalid", 
-                        this.exception);
+                    return;
                 }
 
-                this.thread.Join();
+                lock (this)
+                {
+                    if (this.exception == null)
+                    {
+                        return;
+                    }
+
+                    this.exception = null;
+
+                    throw new AggregateException(
+                        "An exception was thrown by a background thread",
+                        this.exception);
+                }
             }
 
             private Thread thread;
