@@ -9,10 +9,24 @@ namespace CloudBlobBackedObject
         private static readonly byte[] NullHash = new byte[0];
 
         /// <summary>
-        /// Write a serialized representation of obj into serializedObjectWriter.  Returns true if the
-        /// serialized representation is unchanged since lastKnownHash.
+        /// Write a serialized representation of obj into serializedObjectWriter. 
         /// </summary>
-        public static bool SerializeIntoStream<T>(T obj, Stream serializedObjectWriter, byte[] lastKnownHash, out byte[] newHash)
+        public static void SerializeIntoStream<T>(T obj, Stream serializedObjectWriter)
+        {
+            if (obj == null)
+            {
+                return;
+            }
+
+            BinaryFormatter formatter = new BinaryFormatter();
+            formatter.Serialize(serializedObjectWriter, obj);
+        }
+
+        /// <summary>
+        /// Returns true if the serialized representation of obj has changed since the lastKnownHash
+        /// was produced.
+        /// </summary>
+        public static bool ModifiedSince<T>(T obj, byte[] lastKnownHash, out byte[] newHash)
         {
             if (obj == null)
             {
@@ -21,23 +35,11 @@ namespace CloudBlobBackedObject
             else
             {
                 SHA256StreamHasher hasher = new SHA256StreamHasher();
-                BinaryFormatter formatter = new BinaryFormatter();
-
-                Stream serializeInto;
-                if (serializedObjectWriter != null)
-                {
-                    serializeInto = new StreamTee(serializedObjectWriter, hasher);
-                }
-                else
-                {
-                    serializeInto = hasher;
-                }
-
-                formatter.Serialize(serializeInto, obj);
+                SerializeIntoStream(obj, hasher);
                 newHash = hasher.ComputeHash();
             }
 
-            return (lastKnownHash != null) && HashEquals(newHash, lastKnownHash);
+            return (lastKnownHash == null) || !HashEquals(newHash, lastKnownHash);
         }
 
         public static bool DeserializeInto<T>(ref T target, Stream serializedObjectReader, out byte[] lastKnownHash)

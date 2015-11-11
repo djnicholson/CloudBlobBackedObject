@@ -366,14 +366,12 @@ namespace CloudBlobBackedObject
             lock (this.syncRoot)
             {
                 byte[] localContentHash;
-                bool localContentMatchesCloudContent = Serialization.SerializeIntoStream(
-                    this.localObject, 
-                    null, // probe for hash of current content (but don't write it anywhere, yet)
-                    this.lastKnownBlobContentsHash, 
-                    out localContentHash);
 
-                if (localContentMatchesCloudContent)
-                {
+                if (!Serialization.ModifiedSince(
+                    this.localObject, 
+                    this.lastKnownBlobContentsHash, 
+                    out localContentHash))
+                { 
                     return;
                 }
 
@@ -387,15 +385,13 @@ namespace CloudBlobBackedObject
                     () =>
                     {
                         OperationContext context = new OperationContext();
+
                         CloudBlobStream uploadStream = this.backingBlob.OpenWrite(
                             accessCondition: writeAccessConditionAtStartOfUpload,
                             operationContext: context);
-                        Serialization.SerializeIntoStream(
-                            this.localObject,
-                            uploadStream,
-                            this.lastKnownBlobContentsHash,
-                            out localContentHash);
+                        Serialization.SerializeIntoStream(this.localObject, uploadStream);
                         uploadStream.Close();
+
                         this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
                         this.lastKnownBlobContentsHash = localContentHash;
                     },
