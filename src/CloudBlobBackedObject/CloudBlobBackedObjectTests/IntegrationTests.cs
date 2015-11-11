@@ -172,6 +172,7 @@ namespace CloudBlobBackedObjectTests
             try
             {
                 new CloudBlobBacked<string>(blob, leaseDuration: TimeSpan.FromMinutes(0.5));
+                Assert.Fail("I managed to take a lease on this object form elsewhere");
             }
             catch (InvalidOperationException)
             {

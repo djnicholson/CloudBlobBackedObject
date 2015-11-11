@@ -26,13 +26,6 @@ namespace CloudBlobBackedObject
         public const int MinimumLeaseInSeconds = 20;
 
         /// <summary>
-        /// How often the lease is refreshed.  The lower this value is, the less likely we are
-        /// to lose the lease due to slowdown of the renewal thread, but the more "chatty" we are
-        /// to the storage service.
-        /// </summary>
-        public const int LeaseRenewalIntervalInSeconds = 5;
-
-        /// <summary>
         /// Create a wrapper around an object that is backed in Azure Blob Storage.
         /// </summary>
         /// <param name="backingBlob">
@@ -248,7 +241,7 @@ namespace CloudBlobBackedObject
                 while (!stop)
                 {
                     // Renew lease MinimumLeaseInSeconds before it expires:
-                    stop = stopLeaseRenewer.WaitOne(TimeSpan.FromSeconds(LeaseRenewalIntervalInSeconds));
+                    stop = stopLeaseRenewer.WaitOne(TimeSpan.FromSeconds(leaseDuration.TotalSeconds / 2.0));
 
                     if (!stop)
                     {
@@ -382,15 +375,38 @@ namespace CloudBlobBackedObject
                     writeAccessConditionAtStartOfUpload.LeaseId = this.writeAccessCondition.LeaseId;
                 }
 
-                OperationContext context = new OperationContext();
-                this.backingBlob.UploadFromByteArray(
-                    buffer,
-                    0,
-                    buffer.Length,
-                    accessCondition: writeAccessConditionAtStartOfUpload,
-                    operationContext: context);
-                this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
-                this.lastKnownBlobContentsHash = Serialization.Hash(buffer);
+                StorageOperation.Try(
+                    () =>
+                    {
+                        OperationContext context = new OperationContext();
+                        this.backingBlob.UploadFromByteArray(
+                            buffer,
+                            0,
+                            buffer.Length,
+                            accessCondition: writeAccessConditionAtStartOfUpload,
+                            operationContext: context);
+                        this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
+                        this.lastKnownBlobContentsHash = Serialization.Hash(buffer);
+                    },
+                    catchHttp412: e => 
+                    {
+                        if (!string.IsNullOrEmpty(writeAccessConditionAtStartOfUpload.LeaseId))
+                        {
+                            // Someone else has the lease, but we are supposed to have it. That is bad.
+                            throw new TimeoutException("Lease was lost and updates cannot be saved", e);
+                        }
+
+                        // User optimistically tried to update an object that they opted not to take a lease on.
+                        // There update has not been persisted.  Ensure that:
+                        // A. The local data is shortly rolled back to reflect the state of the object in the cloud 
+                        //    (if the user opted to poll for updates).
+                        // B. This write is retried (if still relevent) next time the writer thread wakes up (whoever
+                        //    has the lease may have gone away by then).
+                        this.readAccessCondition.IfNoneMatchETag = null; // [A]
+                        this.lastKnownBlobContentsHash = null; // [B]
+                    });
+
+
             }
         }
 
