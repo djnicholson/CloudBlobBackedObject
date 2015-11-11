@@ -181,6 +181,7 @@ namespace CloudBlobBackedObjectTests
             }
 
             // A reader is ok though
+            PauseForReplication();
             var reader = new CloudBlobBacked<string>(blob, readFromCloudFrequency: ShortInterval);
             Assert.AreEqual("Hello", reader.Object);
 
