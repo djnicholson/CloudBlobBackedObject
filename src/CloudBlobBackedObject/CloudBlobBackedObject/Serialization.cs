@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using System.IO.Compression;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
 
@@ -18,8 +19,24 @@ namespace CloudBlobBackedObject
                 return;
             }
 
+            SerializeIntoStreamImpl(obj, serializedObjectWriter, true);
+        }
+
+        private static void SerializeIntoStreamImpl<T>(T obj, Stream serializedObjectWriter, bool compress)
+        {
             BinaryFormatter formatter = new BinaryFormatter();
-            formatter.Serialize(serializedObjectWriter, obj);
+
+            if (compress)
+            {
+                using (GZipStream compressor = new GZipStream(serializedObjectWriter, CompressionMode.Compress))
+                {
+                    formatter.Serialize(compressor, obj);
+                }
+            }
+            else
+            {
+                formatter.Serialize(serializedObjectWriter, obj);
+            }
         }
 
         /// <summary>
@@ -35,7 +52,7 @@ namespace CloudBlobBackedObject
             else
             {
                 SHA256StreamHasher hasher = new SHA256StreamHasher();
-                SerializeIntoStream(obj, hasher);
+                SerializeIntoStreamImpl(obj, hasher, false);
                 newHash = hasher.ComputeHash();
             }
 
@@ -49,17 +66,25 @@ namespace CloudBlobBackedObject
             if (serializedObjectReader.Length != 0)
             {
                 serializedObjectReader.Seek(0, SeekOrigin.Begin);
-                SHA256StreamHasher readAndHash = new SHA256StreamHasher(serializedObjectReader);
-                BinaryFormatter formatter = new BinaryFormatter();
-                try
+
+                using (GZipStream decompressor = new GZipStream(serializedObjectReader, CompressionMode.Decompress))
+                using (SHA256StreamHasher readAndHash = new SHA256StreamHasher(decompressor))
                 {
-                    target = (T)formatter.Deserialize(readAndHash);
+                    BinaryFormatter formatter = new BinaryFormatter();
+                    try
+                    {
+                        target = (T)formatter.Deserialize(readAndHash);
+                    }
+                    catch (InvalidDataException)
+                    {
+                        return false; // Not valid GZIP compressed data
+                    }
+                    catch (SerializationException)
+                    {
+                        return false; // Not valid BinaryFormatter serialized object
+                    }
+                    lastKnownHash = readAndHash.ComputeHash();
                 }
-                catch (SerializationException)
-                {
-                    return false;
-                }
-                lastKnownHash = readAndHash.ComputeHash();
             }
 
             return true;
