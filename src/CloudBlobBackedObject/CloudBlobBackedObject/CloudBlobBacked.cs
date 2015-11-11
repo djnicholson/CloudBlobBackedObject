@@ -321,7 +321,6 @@ namespace CloudBlobBackedObject
                 () =>
                 {
                     T temp = default(T);
-                    MemoryStream currentBlobContents = new MemoryStream();
                     OperationContext context = new OperationContext();
 
                     lock (this.syncRoot)
@@ -329,9 +328,16 @@ namespace CloudBlobBackedObject
                         StorageOperation.Try(
                             () =>
                             {
-                                this.backingBlob.DownloadToStream(currentBlobContents, accessCondition: this.readAccessCondition, operationContext: context);
+                                Stream blobContentsStream = this.backingBlob.OpenRead(
+                                    accessCondition: this.readAccessCondition, 
+                                    operationContext: context);
+
+                                exists = Serialization.DeserializeInto<T>(
+                                    ref temp, 
+                                    blobContentsStream, 
+                                    out this.lastKnownBlobContentsHash);
+
                                 this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
-                                exists = Serialization.DeserializeInto<T>(ref temp, currentBlobContents, out this.lastKnownBlobContentsHash);
                             },
                             catchHttp404: e =>
                             {
