@@ -287,16 +287,19 @@ namespace CloudBlobBackedObjectTests
                 blob,
                 writeToCloudFrequency: TimeSpan.FromSeconds(0.5));
             writer.Object = "hello";
-            Thread.Sleep(TimeSpan.FromSeconds(1.0));
+            Thread.Sleep(TimeSpan.FromSeconds(2.0));
 
             var snapshot = new CloudBlobBacked<string>(blob);
             Assert.AreEqual("hello", snapshot.Object);
 
             writer.Object = "changed";
-            Thread.Sleep(TimeSpan.FromSeconds(1.0));
+            Thread.Sleep(TimeSpan.FromSeconds(2.0));
 
             Assert.AreEqual("hello", snapshot.Object);
-            
+
+            var snapshot2 = new CloudBlobBacked<string>(blob);
+            Assert.AreEqual("changed", snapshot2.Object);
+
             writer.Shutdown();
         }
 
