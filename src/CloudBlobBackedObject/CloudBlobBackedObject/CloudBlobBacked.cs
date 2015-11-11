@@ -331,7 +331,7 @@ namespace CloudBlobBackedObject
                             {
                                 this.backingBlob.DownloadToStream(currentBlobContents, accessCondition: this.readAccessCondition, operationContext: context);
                                 this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
-                                exists = Serialization.DeserializeInto<T>(ref temp, currentBlobContents);
+                                exists = Serialization.DeserializeInto<T>(ref temp, currentBlobContents, out this.lastKnownBlobContentsHash);
                             },
                             catchHttp404: e =>
                             {
@@ -342,8 +342,6 @@ namespace CloudBlobBackedObject
 
                         if (exists)
                         {
-                            this.lastKnownBlobContentsHash = Serialization.Hash(currentBlobContents.ToArray());
-
                             if (this.OnUpdate != null)
                             {
                                 this.OnUpdate(this, EventArgs.Empty);
@@ -362,11 +360,12 @@ namespace CloudBlobBackedObject
             lock (this.syncRoot)
             {
                 MemoryStream memoryStream = new MemoryStream();
-                Serialization.SerializeIntoStream(this.localObject, memoryStream);
+                byte[] localContentHash;
+                bool localContentMatchesCloudContent = 
+                    Serialization.SerializeIntoStream(this.localObject, memoryStream, this.lastKnownBlobContentsHash, out localContentHash);
                 byte[] buffer = memoryStream.GetBuffer();
 
-                if (this.lastKnownBlobContentsHash != null &&
-                    !Serialization.ModifiedSince(buffer, this.lastKnownBlobContentsHash))
+                if (localContentMatchesCloudContent)
                 {
                     return;
                 }
@@ -388,7 +387,7 @@ namespace CloudBlobBackedObject
                             accessCondition: writeAccessConditionAtStartOfUpload,
                             operationContext: context);
                         this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
-                        this.lastKnownBlobContentsHash = Serialization.Hash(buffer);
+                        this.lastKnownBlobContentsHash = localContentHash;
                     },
                     catchHttp412: e => 
                     {
@@ -407,8 +406,6 @@ namespace CloudBlobBackedObject
                         this.readAccessCondition.IfNoneMatchETag = null; // [A]
                         this.lastKnownBlobContentsHash = null; // [B]
                     });
-
-
             }
         }
 

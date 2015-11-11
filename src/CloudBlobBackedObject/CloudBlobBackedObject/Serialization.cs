@@ -1,70 +1,73 @@
 ﻿using System.IO;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
-using System.Security.Cryptography;
 
 namespace CloudBlobBackedObject
 {
     internal static class Serialization
     {
-        public static void SerializeIntoStream<T>(T obj, Stream serializedObjectWriter)
+        private static readonly byte[] NullHash = new byte[0];
+
+        /// <summary>
+        /// Write a serialized representation of obj into serializedObjectWriter.  Returns true if the
+        /// serialized representation is unchanged since lastKnownHash.
+        /// </summary>
+        public static bool SerializeIntoStream<T>(T obj, Stream serializedObjectWriter, byte[] lastKnownHash, out byte[] newHash)
         {
             if (obj == null)
             {
-                // A null object is represented by serializing zero bytes
+                newHash = NullHash;
             }
             else
             {
+                SHA256StreamHasher hasher = new SHA256StreamHasher();
                 BinaryFormatter formatter = new BinaryFormatter();
-                formatter.Serialize(serializedObjectWriter, obj);
+                formatter.Serialize(new StreamTee(serializedObjectWriter, hasher), obj);
+                newHash = hasher.ComputeHash();
             }
+
+            return (lastKnownHash != null) && HashEquals(newHash, lastKnownHash);
         }
 
-        public static bool DeserializeInto<T>(ref T target, Stream serializedObjectReader)
+        public static bool DeserializeInto<T>(ref T target, Stream serializedObjectReader, out byte[] lastKnownHash)
         {
+            lastKnownHash = NullHash;
+
             if (serializedObjectReader.Length != 0)
             {
                 serializedObjectReader.Seek(0, SeekOrigin.Begin);
+                SHA256StreamHasher readAndHash = new SHA256StreamHasher(serializedObjectReader);
                 BinaryFormatter formatter = new BinaryFormatter();
                 try
                 {
-                    target = (T)formatter.Deserialize(serializedObjectReader);
+                    target = (T)formatter.Deserialize(readAndHash);
                 }
                 catch (SerializationException)
                 {
                     return false;
                 }
+                lastKnownHash = readAndHash.ComputeHash();
             }
 
             return true;
         }
 
-        public static byte[] Hash(byte[] buffer)
+        private static bool HashEquals(byte[] currentHash, byte[] lastKnownHash)
         {
-            using (SHA256 hasher = SHA256Managed.Create())
-            {
-                return hasher.TransformFinalBlock(buffer, 0, buffer.Length);
-            }
-        }
-
-        public static bool ModifiedSince(byte[] currentBuffer, byte[] lastKnownHash)
-        {
-            byte[] currentHash = Hash(currentBuffer);
-
             if (currentHash.Length != lastKnownHash.Length)
             {
-                return true;
+                return false;
             }
 
             for (int i = 0; i < currentHash.Length; i++)
             {
                 if (currentHash[i] != lastKnownHash[i])
                 {
-                    return true;
+                    return false;
                 }
             }
 
-            return false;
+            return true;
         }
     }
 }
