@@ -361,7 +361,9 @@ namespace CloudBlobBackedObject
         {
             lock (this.syncRoot)
             {
-                byte[] buffer = Serialization.Serialize(this.localObject);
+                MemoryStream memoryStream = new MemoryStream();
+                Serialization.SerializeIntoStream(this.localObject, memoryStream);
+                byte[] buffer = memoryStream.GetBuffer();
 
                 if (this.lastKnownBlobContentsHash != null &&
                     !Serialization.ModifiedSince(buffer, this.lastKnownBlobContentsHash))

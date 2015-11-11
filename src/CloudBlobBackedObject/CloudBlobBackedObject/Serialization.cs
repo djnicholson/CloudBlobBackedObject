@@ -8,18 +8,16 @@ namespace CloudBlobBackedObject
 {
     internal static class Serialization
     {
-        public static byte[] Serialize(Object obj)
+        public static void SerializeIntoStream(Object obj, Stream outputStream)
         {
             if (obj == null)
             {
-                return new byte[0];
+                // A null object is represented by serializing zero bytes
             }
             else
             {
                 BinaryFormatter formatter = new BinaryFormatter();
-                MemoryStream memory = new MemoryStream();
-                formatter.Serialize(memory, obj);
-                return memory.GetBuffer();
+                formatter.Serialize(outputStream, obj);
             }
         }
 
