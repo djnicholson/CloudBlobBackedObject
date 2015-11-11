@@ -1,5 +1,4 @@
-﻿using System;
-using System.IO;
+﻿using System.IO;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Security.Cryptography;
@@ -8,7 +7,7 @@ namespace CloudBlobBackedObject
 {
     internal static class Serialization
     {
-        public static void SerializeIntoStream(Object obj, Stream outputStream)
+        public static void SerializeIntoStream<T>(T obj, Stream serializedObjectWriter)
         {
             if (obj == null)
             {
@@ -17,7 +16,7 @@ namespace CloudBlobBackedObject
             else
             {
                 BinaryFormatter formatter = new BinaryFormatter();
-                formatter.Serialize(outputStream, obj);
+                formatter.Serialize(serializedObjectWriter, obj);
             }
         }
 
