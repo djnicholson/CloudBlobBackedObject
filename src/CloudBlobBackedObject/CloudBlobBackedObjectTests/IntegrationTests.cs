@@ -72,7 +72,7 @@ namespace CloudBlobBackedObjectTests
                 if (!success)
                 {
                     GC.Collect();
-                    Thread.Sleep(TimeSpan.FromSeconds(1.0));
+                    Thread.Yield();
                 }
             }
         }
@@ -91,52 +91,52 @@ namespace CloudBlobBackedObjectTests
 
             Trace.TraceInformation("readOnceUnderLease");
             var readOnceUnderLease =
-                new CloudBlobBacked<T>(NewBlob(), leaseDuration: TimeSpan.FromMinutes(1.0));
+                new CloudBlobBacked<T>(NewBlob(), leaseDuration: LeaseDuration);
             test(readOnceUnderLease);
             readOnceUnderLease.Shutdown();
 
             Trace.TraceInformation("readContinually");
             var readContinually =
-                new CloudBlobBacked<T>(NewBlob(), readFromCloudFrequency: TimeSpan.FromSeconds(1.0));
+                new CloudBlobBacked<T>(NewBlob(), readFromCloudFrequency: ShortInterval);
             test(readContinually);
             readContinually.Shutdown();
 
             Trace.TraceInformation("readContinuallyUnderLease");
             var readContinuallyUnderLease = new CloudBlobBacked<T>(
                 NewBlob(), 
-                readFromCloudFrequency: TimeSpan.FromSeconds(1.0),
-                leaseDuration: TimeSpan.FromMinutes(1.0));
+                readFromCloudFrequency: ShortInterval,
+                leaseDuration: LeaseDuration);
             test(readContinuallyUnderLease);
             readContinuallyUnderLease.Shutdown();
 
             Trace.TraceInformation("writeContinually");
             var writeContinually =
-                new CloudBlobBacked<T>(NewBlob(), writeToCloudFrequency: TimeSpan.FromSeconds(1.0));
+                new CloudBlobBacked<T>(NewBlob(), writeToCloudFrequency: ShortInterval);
             test(writeContinually);
             writeContinually.Shutdown();
 
             Trace.TraceInformation("writeContinuallyUnderLease");
             var writeContinuallyUnderLease = new CloudBlobBacked<T>(
                 NewBlob(), 
-                writeToCloudFrequency: TimeSpan.FromSeconds(1.0),
-                leaseDuration: TimeSpan.FromMinutes(1.0));
+                writeToCloudFrequency: ShortInterval,
+                leaseDuration: LeaseDuration);
             test(writeContinuallyUnderLease);
             writeContinuallyUnderLease.Shutdown();
 
             Trace.TraceInformation("readWriteContinually");
             var readWriteContinually = new CloudBlobBacked<T>(
                 NewBlob(), 
-                readFromCloudFrequency: TimeSpan.FromSeconds(1.0),
-                writeToCloudFrequency: TimeSpan.FromSeconds(1.0));
+                readFromCloudFrequency: ShortInterval,
+                writeToCloudFrequency: ShortInterval);
             test(readWriteContinually);
             readWriteContinually.Shutdown();
 
             Trace.TraceInformation("readWriteContinuallyUnderLease");
             var readWriteContinuallyUnderLease = new CloudBlobBacked<T>(
                 NewBlob(),
-                readFromCloudFrequency: TimeSpan.FromSeconds(1.0),
-                writeToCloudFrequency: TimeSpan.FromSeconds(1.0),
-                leaseDuration: TimeSpan.FromMinutes(1.0));
+                readFromCloudFrequency: ShortInterval,
+                writeToCloudFrequency: ShortInterval,
+                leaseDuration: LeaseDuration);
             test(readWriteContinuallyUnderLease);
             readWriteContinuallyUnderLease.Shutdown();
         }
@@ -150,7 +150,9 @@ namespace CloudBlobBackedObjectTests
                 Assert.IsNull(target.Object);
                 target.Object = "Hello world!";
                 Assert.AreEqual("Hello world!", target.Object);
-                Thread.Sleep(TimeSpan.FromSeconds(3.0));
+
+                PauseForReplication();
+
                 Assert.AreEqual("Hello world!", target.Object);
                 Assert.IsTrue(blobClient.GetBlobReferenceFromServer(target.BackingBlobUri).Exists());
             });
@@ -164,14 +166,14 @@ namespace CloudBlobBackedObjectTests
             // Take a lease out on a new blob
             var exclusiveWriter = new CloudBlobBacked<string>(
                 blob,
-                writeToCloudFrequency: TimeSpan.FromSeconds(0.5), 
-                leaseDuration: TimeSpan.FromMinutes(1.0));
+                writeToCloudFrequency: ShortInterval, 
+                leaseDuration: LeaseDuration);
             exclusiveWriter.Object = "Hello";
 
             // Verify that no one else can take the lease
             try
             {
-                new CloudBlobBacked<string>(blob, leaseDuration: TimeSpan.FromMinutes(0.5));
+                new CloudBlobBacked<string>(blob, leaseDuration: LeaseDuration);
                 Assert.Fail("I managed to take a lease on this object form elsewhere");
             }
             catch (InvalidOperationException)
@@ -179,20 +181,19 @@ namespace CloudBlobBackedObjectTests
             }
 
             // A reader is ok though
-            Thread.Sleep(TimeSpan.FromSeconds(2.0));
-            var reader = new CloudBlobBacked<string>(blob, readFromCloudFrequency: TimeSpan.FromSeconds(0.5));
+            var reader = new CloudBlobBacked<string>(blob, readFromCloudFrequency: ShortInterval);
             Assert.AreEqual("Hello", reader.Object);
 
             // Someone else can try and update it, but updates will not be made while the lease is active...
-            var otherWriter = new CloudBlobBacked<string>(blob, writeToCloudFrequency: TimeSpan.FromSeconds(0.5));
+            var otherWriter = new CloudBlobBacked<string>(blob, writeToCloudFrequency: ShortInterval);
             otherWriter.Object = "I changed";
-            Thread.Sleep(TimeSpan.FromSeconds(2.0));
+            PauseForReplication();
             Assert.AreNotEqual("I changed", reader.Object);
             Assert.AreEqual("I changed", otherWriter.Object);
 
             // The write will eventually be made after the lease is given up though
             exclusiveWriter.Shutdown();
-            Thread.Sleep(TimeSpan.FromSeconds(2.0));
+            PauseForReplication();
             Assert.AreEqual("I changed", reader.Object);
             Assert.AreEqual("I changed", otherWriter.Object);
 
@@ -207,15 +208,15 @@ namespace CloudBlobBackedObjectTests
             var writer = new CloudBlobBacked<string>(
                 blob,
                 leaseDuration: lease,
-                writeToCloudFrequency: TimeSpan.FromSeconds(0.1));
+                writeToCloudFrequency: ShortInterval);
 
             var reader = new CloudBlobBacked<string>(
                 blob,
-                readFromCloudFrequency: TimeSpan.FromSeconds(0.1));
+                readFromCloudFrequency: ShortInterval);
 
             writer.Object = "Hello world!";
 
-            Thread.Sleep(TimeSpan.FromSeconds(2.0));
+            PauseForReplication();
 
             Assert.AreEqual(writer.Object, reader.Object);
 
@@ -232,7 +233,7 @@ namespace CloudBlobBackedObjectTests
         [TestMethod]
         public void ReaderWriterWithLease()
         {
-            ReaderWriterImpl(lease: TimeSpan.FromSeconds(30.0));
+            ReaderWriterImpl(lease: LeaseDuration);
         }
 
         [TestMethod]
@@ -245,16 +246,16 @@ namespace CloudBlobBackedObjectTests
 
             var witness = new CloudBlobBacked<string>(
                 blob,
-                readFromCloudFrequency: TimeSpan.FromSeconds(0.1));
+                readFromCloudFrequency: ShortInterval);
 
             var writer1 = new CloudBlobBacked<string>(
                 blob,
-                readFromCloudFrequency: TimeSpan.FromSeconds(0.1),
+                readFromCloudFrequency: ShortInterval,
                 writeToCloudFrequency: TimeSpan.FromSeconds(0.3));
 
             var writer2 = new CloudBlobBacked<string>(
                 blob,
-                readFromCloudFrequency: TimeSpan.FromSeconds(0.1),
+                readFromCloudFrequency: ShortInterval,
                 writeToCloudFrequency: TimeSpan.FromSeconds(0.7));
 
             bool writer1Success = false;
@@ -285,15 +286,17 @@ namespace CloudBlobBackedObjectTests
 
             var writer = new CloudBlobBacked<string>(
                 blob,
-                writeToCloudFrequency: TimeSpan.FromSeconds(0.5));
+                writeToCloudFrequency: ShortInterval);
             writer.Object = "hello";
-            Thread.Sleep(TimeSpan.FromSeconds(2.0));
+
+            PauseForReplication();
 
             var snapshot = new CloudBlobBacked<string>(blob);
             Assert.AreEqual("hello", snapshot.Object);
 
             writer.Object = "changed";
-            Thread.Sleep(TimeSpan.FromSeconds(2.0));
+
+            PauseForReplication();
 
             Assert.AreEqual("hello", snapshot.Object);
 
@@ -310,17 +313,18 @@ namespace CloudBlobBackedObjectTests
 
             var writer = new CloudBlobBacked<string>(
                 blob,
-                writeToCloudFrequency: TimeSpan.FromSeconds(0.1));
+                writeToCloudFrequency: ShortInterval);
             writer.Object = "hello";
-            Thread.Sleep(TimeSpan.FromSeconds(2.0));
+
+            PauseForReplication();
 
             var reader1 = new CloudBlobBacked<string>(
                 blob,
-                readFromCloudFrequency: TimeSpan.FromSeconds(0.1));
+                readFromCloudFrequency: ShortInterval);
 
             var reader2 = new CloudBlobBacked<string>(
                 blob,
-                readFromCloudFrequency: TimeSpan.FromSeconds(0.1));
+                readFromCloudFrequency: ShortInterval);
 
             lock (reader1.SyncRoot)
             {
@@ -328,13 +332,14 @@ namespace CloudBlobBackedObjectTests
                 Assert.AreEqual("hello", reader2.Object);
 
                 writer.Object = "new";
-                Thread.Sleep(TimeSpan.FromSeconds(2.0));
+
+                PauseForReplication();
 
                 Assert.AreEqual("hello", reader1.Object);
                 Assert.AreEqual("new", reader2.Object);
             }
 
-            Thread.Sleep(TimeSpan.FromSeconds(2.0));
+            PauseForReplication();
 
             Assert.AreEqual("new", reader1.Object);
             Assert.AreEqual("new", reader2.Object);
@@ -348,21 +353,22 @@ namespace CloudBlobBackedObjectTests
         public void LockBlocksWrites()
         {
             var blob = NewBlob();
-
+            
             var writer1 = new CloudBlobBacked<string>(
                 blob,
-                writeToCloudFrequency: TimeSpan.FromSeconds(0.1));
+                writeToCloudFrequency: ShortInterval);
 
             var writer2 = new CloudBlobBacked<string>(
                 blob,
-                writeToCloudFrequency: TimeSpan.FromSeconds(0.1));
+                writeToCloudFrequency: ShortInterval);
 
             writer1.Object = "hello";
-            Thread.Sleep(TimeSpan.FromSeconds(1.0));
+
+            PauseForReplication();
 
             var reader = new CloudBlobBacked<string>(
                 blob,
-                readFromCloudFrequency: TimeSpan.FromSeconds(0.1));
+                readFromCloudFrequency: ShortInterval);
             Assert.AreEqual("hello", reader.Object);
 
             lock (writer1.SyncRoot)
@@ -371,20 +377,30 @@ namespace CloudBlobBackedObjectTests
 
                 writer1.Object = "1";
                 writer2.Object = "2";
-                Thread.Sleep(TimeSpan.FromSeconds(2.0));
+
+                PauseForReplication();
 
                 Assert.AreEqual("2", reader.Object);
 
                 writer2.Shutdown();
             }
 
-            Thread.Sleep(TimeSpan.FromSeconds(1.0));
+            PauseForReplication();
 
             Assert.AreEqual("1", reader.Object);
-            
+
             reader.Shutdown();
             writer1.Shutdown();
             writer2.Shutdown();
+        }
+
+        private static readonly TimeSpan LeaseDuration = TimeSpan.FromMinutes(0.5);
+        private static readonly TimeSpan ShortInterval = TimeSpan.FromSeconds(0.1);
+        private static readonly TimeSpan LongerInterval = TimeSpan.FromSeconds(2.0);
+
+        private static void PauseForReplication()
+        {
+            Thread.Sleep(LongerInterval);
         }
     }
 }
