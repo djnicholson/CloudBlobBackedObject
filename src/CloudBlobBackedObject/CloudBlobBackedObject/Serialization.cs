@@ -22,7 +22,18 @@ namespace CloudBlobBackedObject
             {
                 SHA256StreamHasher hasher = new SHA256StreamHasher();
                 BinaryFormatter formatter = new BinaryFormatter();
-                formatter.Serialize(new StreamTee(serializedObjectWriter, hasher), obj);
+
+                Stream serializeInto;
+                if (serializedObjectWriter != null)
+                {
+                    serializeInto = new StreamTee(serializedObjectWriter, hasher);
+                }
+                else
+                {
+                    serializeInto = hasher;
+                }
+
+                formatter.Serialize(serializeInto, obj);
                 newHash = hasher.ComputeHash();
             }
 

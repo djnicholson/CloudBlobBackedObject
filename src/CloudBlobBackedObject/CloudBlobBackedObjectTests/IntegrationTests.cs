@@ -41,7 +41,7 @@ namespace CloudBlobBackedObjectTests
             root.CreateIfNotExists();         
         }
 
-        private ICloudBlob NewBlob()
+        private CloudBlockBlob NewBlob()
         {
             CloudBlobContainer root = this.blobClient.GetRootContainerReference();
             return root.GetBlockBlobReference(this.blobPrefix + Guid.NewGuid());

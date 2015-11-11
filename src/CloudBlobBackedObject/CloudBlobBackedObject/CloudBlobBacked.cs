@@ -60,7 +60,7 @@ namespace CloudBlobBackedObject
         /// data in the backing blob has not been updated since the last retrieval.
         /// </param>
         public CloudBlobBacked(
-            ICloudBlob backingBlob,
+            CloudBlockBlob backingBlob,
             TimeSpan? leaseDuration = null,
             TimeSpan? writeToCloudFrequency = null,
             TimeSpan? readFromCloudFrequency = null)
@@ -365,11 +365,12 @@ namespace CloudBlobBackedObject
         {
             lock (this.syncRoot)
             {
-                MemoryStream memoryStream = new MemoryStream();
                 byte[] localContentHash;
-                bool localContentMatchesCloudContent = 
-                    Serialization.SerializeIntoStream(this.localObject, memoryStream, this.lastKnownBlobContentsHash, out localContentHash);
-                byte[] buffer = memoryStream.GetBuffer();
+                bool localContentMatchesCloudContent = Serialization.SerializeIntoStream(
+                    this.localObject, 
+                    null, // probe for hash of current content (but don't write it anywhere, yet)
+                    this.lastKnownBlobContentsHash, 
+                    out localContentHash);
 
                 if (localContentMatchesCloudContent)
                 {
@@ -386,12 +387,15 @@ namespace CloudBlobBackedObject
                     () =>
                     {
                         OperationContext context = new OperationContext();
-                        this.backingBlob.UploadFromByteArray(
-                            buffer,
-                            0,
-                            buffer.Length,
+                        CloudBlobStream uploadStream = this.backingBlob.OpenWrite(
                             accessCondition: writeAccessConditionAtStartOfUpload,
                             operationContext: context);
+                        Serialization.SerializeIntoStream(
+                            this.localObject,
+                            uploadStream,
+                            this.lastKnownBlobContentsHash,
+                            out localContentHash);
+                        uploadStream.Close();
                         this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
                         this.lastKnownBlobContentsHash = localContentHash;
                     },
@@ -426,7 +430,7 @@ namespace CloudBlobBackedObject
         private AccessCondition writeAccessCondition = new AccessCondition();
         private AccessCondition readAccessCondition = new AccessCondition();
 
-        private ICloudBlob backingBlob;
+        private CloudBlockBlob backingBlob;
         private T localObject;
         private byte[] lastKnownBlobContentsHash;
         private Object syncRoot = new Object();
