@@ -40,6 +40,7 @@ namespace CloudBlobBackedObject
 
         ~MarshalledExceptionsThread()
         {
+            // TODO: Implement IDisposable, and don't plan to throw exceptions from destructor
             ThrowBackgroundException();
         }
 
@@ -57,11 +58,12 @@ namespace CloudBlobBackedObject
                     return;
                 }
 
+                Exception innerException = this.exception;
                 this.exception = null;
 
                 throw new AggregateException(
                     "An exception was thrown by a background thread",
-                    this.exception);
+                    innerException);
             }
         }
 
