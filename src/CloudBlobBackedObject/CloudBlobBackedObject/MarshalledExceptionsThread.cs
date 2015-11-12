@@ -112,6 +112,8 @@ namespace CloudBlobBackedObject
         {
             if (disposing)
             {
+                this.thread = null;
+
                 // Per https://msdn.microsoft.com/en-us/library/b1yfkh5e(v=vs.110).aspx:
                 //   AVOID throwing an exception from within Dispose(bool) except under critical 
                 //   situations where the containing process has been corrupted (leaks, inconsistent 
@@ -122,8 +124,6 @@ namespace CloudBlobBackedObject
                 // If they ignore this advice, Dispose may throw and clients are responsible for
                 // catching and handling this in client code.  The finalizer will never throw.
                 this.ThrowBackgroundException();
-
-                this.thread = null;
             }
         }
 

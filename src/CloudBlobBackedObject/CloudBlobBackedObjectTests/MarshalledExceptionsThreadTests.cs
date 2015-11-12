@@ -26,7 +26,6 @@ namespace CloudBlobBackedObjectTests
         {
             MarshalledExceptionsThread target = NewExceptionThrowerThread();
             target = null;
-            GC.Collect();
         }
 
         [TestMethod]
@@ -103,17 +102,6 @@ namespace CloudBlobBackedObjectTests
             }
         }
 
-        // TODO: Move ot IDisposable pattern
-        //[TestMethod]
-        //[ExpectedException(typeof(AggregateException))]
-        //public void DestructorThrowsPendingException()
-        //{
-        //    MarshalledExceptionsThread target = NewExceptionThrowerThread();
-        //    target.Start();
-        //    target = null;
-        //    GC.Collect();
-        //}
-
         [TestMethod]
         public void JoinOnlyThrowsExceptionOnce()
         {
@@ -129,6 +117,34 @@ namespace CloudBlobBackedObjectTests
             }
 
             target.Join();
+        }
+
+        [TestMethod]
+        public void DisposeDoesNotThrowIfJoinCalledFirst()
+        {
+            using (MarshalledExceptionsThread target = NewExceptionThrowerThread())
+            {
+                target.Start();
+
+                try
+                {
+                    target.Join();
+                    Assert.Fail("target.Join(); should have thrown an exception");
+                }
+                catch (AggregateException)
+                {
+                }
+            }
+        }
+
+        [TestMethod]
+        [ExpectedException(typeof(AggregateException))]
+        public void DisposeMightThrowIfJoinNotCalled()
+        {
+            using (MarshalledExceptionsThread target = NewExceptionThrowerThread())
+            {
+                target.Start();
+            }
         }
 
         private static void SleepToAllowActivityInThread()
