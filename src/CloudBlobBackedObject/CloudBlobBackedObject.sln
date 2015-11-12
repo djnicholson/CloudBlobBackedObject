@@ -12,6 +12,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "nuget", "nuget", "{CC6A461D
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CloudBlobBackedObjectTests", "CloudBlobBackedObjectTests\CloudBlobBackedObjectTests.csproj", "{EE6C622D-66AC-4F4C-AEF3-4D31CB2C0CE5}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{4695227A-11D4-4AE2-9194-A2FD79C61669}"
+	ProjectSection(SolutionItems) = preProject
+		tests\MarshalledExceptionsThread.UnitTests.playlist = tests\MarshalledExceptionsThread.UnitTests.playlist
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
