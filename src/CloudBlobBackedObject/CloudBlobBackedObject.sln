@@ -14,6 +14,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CloudBlobBackedObjectTests"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{4695227A-11D4-4AE2-9194-A2FD79C61669}"
 	ProjectSection(SolutionItems) = preProject
+		tests\CloudBlobBackedObject.IntegrationTests.playlist = tests\CloudBlobBackedObject.IntegrationTests.playlist
 		tests\MarshalledExceptionsThread.UnitTests.playlist = tests\MarshalledExceptionsThread.UnitTests.playlist
 	EndProjectSection
 EndProject
