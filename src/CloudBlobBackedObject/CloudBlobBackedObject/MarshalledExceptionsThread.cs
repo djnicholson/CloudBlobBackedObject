@@ -11,7 +11,7 @@ namespace CloudBlobBackedObject
             
             this.thread = new Thread(() =>
             {
-                lock (this)
+                lock (this.exceptionExclusiveLock)
                 {
                     try
                     {
@@ -30,7 +30,7 @@ namespace CloudBlobBackedObject
         /// </summary>
         public void Start()
         {
-            this.GetThread().Start();
+            this.OperateExclusivelyOnThread(t => t.Start());
         }
 
         /// <summary>
@@ -41,7 +41,7 @@ namespace CloudBlobBackedObject
         /// </summary>
         public void Join()
         {
-            this.GetThread().Join();
+            this.OperateExclusivelyOnThread(t => t.Join());
             this.ThrowBackgroundException();
         }
 
@@ -54,26 +54,22 @@ namespace CloudBlobBackedObject
         /// If this object has been disposed, throws an ObjectDisposedException; otherwise returns
         /// a reference to the underlying thread.
         /// </summary>
-        private Thread GetThread()
+        private void OperateExclusivelyOnThread(Action<Thread> action)
         {
-            Thread threadCopy;
-
-            lock (this.thread)
+            lock (this.threadExclusiveLock)
             {
                 if (this.thread == null)
                 {
                     throw new ObjectDisposedException("MarshalledExceptionsThread");
                 }
 
-                threadCopy = this.thread;
+                action(this.thread);
             }
-
-            return threadCopy;
         }
 
         private void ThrowBackgroundException()
         {
-            lock (this)
+            lock (this.exceptionExclusiveLock)
             {
                 // If we obtain this lock, we can infer that the thread never started, or
                 // has finished.
@@ -112,7 +108,10 @@ namespace CloudBlobBackedObject
         {
             if (disposing)
             {
-                this.thread = null;
+                lock (this.threadExclusiveLock)
+                {
+                    this.thread = null;
+                }
 
                 // Per https://msdn.microsoft.com/en-us/library/b1yfkh5e(v=vs.110).aspx:
                 //   AVOID throwing an exception from within Dispose(bool) except under critical 
@@ -127,6 +126,8 @@ namespace CloudBlobBackedObject
             }
         }
 
+        private object threadExclusiveLock = new object();
+        private object exceptionExclusiveLock = new object();
         private Thread thread; // Class invariant: thread == null => disposed
         private Exception exception;
     }

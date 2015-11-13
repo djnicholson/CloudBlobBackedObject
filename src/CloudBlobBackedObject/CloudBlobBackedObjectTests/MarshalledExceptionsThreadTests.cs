@@ -14,6 +14,7 @@ namespace CloudBlobBackedObjectTests
             try
             {
                 GC.Collect();
+                GC.Collect();
             }
             catch (AggregateException e)
             {
@@ -24,8 +25,9 @@ namespace CloudBlobBackedObjectTests
         [TestMethod]
         public void ThreadThatWasNeverStartedNeverThrows()
         {
-            MarshalledExceptionsThread target = NewExceptionThrowerThread();
-            target = null;
+            using (MarshalledExceptionsThread target = NewExceptionThrowerThread())
+            {
+            }
         }
 
         [TestMethod]
@@ -120,6 +122,34 @@ namespace CloudBlobBackedObjectTests
         }
 
         [TestMethod]
+        public void DisposeJoinsThread()
+        {
+            bool threadHasExited = false;
+            using (MarshalledExceptionsThread target = new MarshalledExceptionsThread(
+                () =>
+                {
+                    Thread.Sleep(TimeSpan.FromSeconds(10.0));
+                    threadHasExited = true;
+                }))
+            {
+                target.Start();
+                Assert.IsFalse(threadHasExited);
+            }
+
+            Assert.IsTrue(threadHasExited);
+        }
+
+        [TestMethod]
+        public void FinalizerNeverThrows()
+        {
+            MarshalledExceptionsThread target = NewExceptionThrowerThread(); // never disposed
+            target.Start();
+            target = null;
+            GC.Collect();
+            GC.Collect();
+        }
+
+        [TestMethod]
         public void DisposeDoesNotThrowIfJoinCalledFirst()
         {
             using (MarshalledExceptionsThread target = NewExceptionThrowerThread())
@@ -145,6 +175,31 @@ namespace CloudBlobBackedObjectTests
             {
                 target.Start();
             }
+        }
+
+        [TestMethod]
+        [ExpectedException(typeof(ObjectDisposedException))]
+        public void CannotJoinAfterDispose()
+        {
+            MarshalledExceptionsThread targetCopy;
+            using (MarshalledExceptionsThread target = new MarshalledExceptionsThread(() => { }))
+            {
+                targetCopy = target;
+                target.Start();
+            }
+            targetCopy.Join();
+        }
+
+        [TestMethod]
+        [ExpectedException(typeof(ObjectDisposedException))]
+        public void CannotStartAfterDispose()
+        {
+            MarshalledExceptionsThread targetCopy;
+            using (MarshalledExceptionsThread target = new MarshalledExceptionsThread(() => { }))
+            {
+                targetCopy = target;
+            }
+            targetCopy.Start();
         }
 
         private static void SleepToAllowActivityInThread()
