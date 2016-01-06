@@ -93,17 +93,17 @@ namespace CloudBlobBackedObject
                     AcquireLeaseForExistingBlob(leaseDuration.Value);
                 }
 
-                StartLeaseRenewer(leaseDuration.Value);
+                this.leaseRenewer = StartLeaseRenewer(leaseDuration.Value);
             }
 
             if (writeToCloudFrequency.HasValue)
             {
-                StartBlobWriter(writeToCloudFrequency.Value);
+                this.blobWriter = StartBlobWriter(writeToCloudFrequency.Value);
             }
 
             if (readFromCloudFrequency.HasValue)
             {
-                StartBlobReader(readFromCloudFrequency.Value);
+                this.blobReader = StartBlobReader(readFromCloudFrequency.Value);
             }
         }
 
@@ -225,9 +225,9 @@ namespace CloudBlobBackedObject
         /// Starts a task that triggers a request to renew the lease on the backing blob MinimumLeaseInSeconds
         /// before it expires, and releases the lease when the task is aborted.
         /// </summary>
-        private void StartLeaseRenewer(TimeSpan leaseDuration)
+        private MarshalledExceptionsTask StartLeaseRenewer(TimeSpan leaseDuration)
         {
-            this.leaseRenewer = new MarshalledExceptionsTask(
+            return new MarshalledExceptionsTask(
                 () =>
                 {
                     bool stop = false;
@@ -273,9 +273,9 @@ namespace CloudBlobBackedObject
         /// Start a task that writes the local state to the backing blob (if needed) at the given frequency,
         /// and writes the local state one final time when the task is aborted.
         /// </summary>
-        private void StartBlobWriter(TimeSpan writeToCloudFrequency)
+        private MarshalledExceptionsTask StartBlobWriter(TimeSpan writeToCloudFrequency)
         {
-            this.blobWriter = new MarshalledExceptionsTask(
+            return new MarshalledExceptionsTask(
                 () =>
                 {
                     bool stop = false;
@@ -291,9 +291,9 @@ namespace CloudBlobBackedObject
         /// Starts a task that updates the local state from the backing blob at the given
         /// frequency.
         /// </summary>
-        private void StartBlobReader(TimeSpan readFromCloudFrequency)
+        private MarshalledExceptionsTask StartBlobReader(TimeSpan readFromCloudFrequency)
         {
-            this.blobReader = new MarshalledExceptionsTask(
+            return new MarshalledExceptionsTask(
                 () =>
                 {
                     bool stop = false;
