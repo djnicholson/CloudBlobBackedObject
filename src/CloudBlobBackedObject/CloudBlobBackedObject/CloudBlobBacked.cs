@@ -4,6 +4,7 @@ using Microsoft.WindowsAzure.Storage.Blob;
 using System;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace CloudBlobBackedObject
 {
@@ -162,8 +163,10 @@ namespace CloudBlobBackedObject
         public event EventHandler OnUpdate;
 
         /// <summary>
-        /// Aborts the various worker threads.  The writer thread is allowed to fully terminate before the
-        /// lease renewer thread is aborted (to allow a final write to succeed before giving up the lease).
+        /// Aborts the various worker tasks.  The writer task is allowed to fully terminate before the
+        /// lease renewer task is aborted (to allow a final write to succeed before giving up the lease).
+        /// 
+        /// TODO: Remove this (dangerous due to arbitrary finalizer invocation order)
         /// </summary>
         ~CloudBlobBacked()
         {
@@ -171,8 +174,8 @@ namespace CloudBlobBackedObject
         }
 
         /// <summary>
-        /// Aborts the various worker threads.  The writer thread is allowed to fully terminate before the
-        /// lease renewer thread is aborted (to allow a final write to succeed before giving up the lease).
+        /// Aborts the various worker tasks.  The writer task is allowed to fully terminate before the
+        /// lease renewer task is aborted (to allow a final write to succeed before giving up the lease).
         /// The object can still be used after calling Shutdown, but it will no longer be periodically
         /// synchonrized with the data in the cloud and the lease (if taken) will be given up.
         /// </summary>
@@ -180,26 +183,26 @@ namespace CloudBlobBackedObject
         {
             if (this.blobReader != null)
             {
-                Thread t = this.blobReader;
+                Task t = this.blobReader;
                 this.blobReader = null;
                 this.stopBlobReader.Set();
-                t.Join();
+                t.Wait();
             }
 
             if (this.blobWriter != null)
             {
-                Thread t = this.blobWriter;
+                Task t = this.blobWriter;
                 this.blobWriter = null;
                 this.stopBlobWriter.Set();
-                t.Join();
+                t.Wait();
             }
 
             if (this.leaseRenewer != null)
             {
-                Thread t = this.leaseRenewer;
+                Task t = this.leaseRenewer;
                 this.leaseRenewer = null;
                 this.stopLeaseRenewer.Set();
-                t.Join();
+                t.Wait();
             }
         }
 
@@ -230,18 +233,18 @@ namespace CloudBlobBackedObject
         }
 
         /// <summary>
-        /// Starts a thread that triggers a request to renew the lease on the backing blob MinimumLeaseInSeconds
-        /// before it expires, and releases the lease whent he thread is aborted.
+        /// Starts a task that triggers a request to renew the lease on the backing blob MinimumLeaseInSeconds
+        /// before it expires, and releases the lease whent the task is aborted.
         /// </summary>
         private void StartLeaseRenewer(TimeSpan leaseDuration)
         {
-            this.leaseRenewer = (new Thread(() =>
+            this.leaseRenewer = Task.Run(() =>
             {
                 bool stop = false;
                 while (!stop)
                 {
                     // Renew lease MinimumLeaseInSeconds before it expires:
-                    stop = stopLeaseRenewer.WaitOne(TimeSpan.FromSeconds(leaseDuration.TotalSeconds / 2.0));
+                    stop = stopLeaseRenewer.Wait(TimeSpan.FromSeconds(leaseDuration.TotalSeconds / 2.0));
 
                     if (!stop)
                     {
@@ -255,7 +258,7 @@ namespace CloudBlobBackedObject
                             },
                             catchHttp409: e =>
                             {
-                                // Lost our original lease (maybe due to this thread sleeping for an extremely long time)
+                                // Lost our original lease (maybe due to this task sleeping for an extremely long time)
                                 AcquireLeaseForExistingBlob(leaseDuration);
                             });
                     }
@@ -273,44 +276,41 @@ namespace CloudBlobBackedObject
                     {
                         // Maybe we didn't have the lease anyway? Ooh well, we're shutting down anyway (absorb this error)
                     });
-            }));
-            this.leaseRenewer.Start();
+            });
         }
 
         /// <summary>
-        /// Start a thread that writes the local state to the backing blob (if needed) at the given frequency,
-        /// and writes the local state one final time when the thread is aborted.
+        /// Start a task that writes the local state to the backing blob (if needed) at the given frequency,
+        /// and writes the local state one final time when the task is aborted.
         /// </summary>
         private void StartBlobWriter(TimeSpan writeToCloudFrequency)
         {
-            this.blobWriter = new Thread(() =>
+            this.blobWriter = Task.Run(() =>
             {
                 bool stop = false;
                 while (!stop)
                 {
-                    stop = stopBlobWriter.WaitOne(writeToCloudFrequency);
+                    stop = stopBlobWriter.Wait(writeToCloudFrequency);
                     WriteLocalDataToCloudIfNeeded();
                 }
             });
-            this.blobWriter.Start();
         }
 
         /// <summary>
-        /// Starts a thread that updates the local state from the backing blob at the given
+        /// Starts a task that updates the local state from the backing blob at the given
         /// frequency.
         /// </summary>
         private void StartBlobReader(TimeSpan readFromCloudFrequency)
         {
-            this.blobReader = new Thread(() =>
+            this.blobReader = Task.Run(() =>
             {
                 bool stop = false;
                 while (!stop)
                 {
                     TryRefreshDataFromCloudBlob();
-                    stop = stopBlobReader.WaitOne(readFromCloudFrequency);
+                    stop = stopBlobReader.Wait(readFromCloudFrequency);
                 }
             });
-            this.blobReader.Start();
         }
 
         private bool TryRefreshDataFromCloudBlob()
@@ -407,7 +407,7 @@ namespace CloudBlobBackedObject
                         // There update has not been persisted.  Ensure that:
                         // A. The local data is shortly rolled back to reflect the state of the object in the cloud 
                         //    (if the user opted to poll for updates).
-                        // B. This write is retried (if still relevent) next time the writer thread wakes up (whoever
+                        // B. This write is retried (if still relevent) next time the writer task wakes up (whoever
                         //    has the lease may have gone away by then).
                         this.readAccessCondition.IfNoneMatchETag = null; // [A]
                         this.lastKnownBlobContentsHash = null; // [B]
@@ -415,13 +415,13 @@ namespace CloudBlobBackedObject
             }
         }
 
-        private Thread leaseRenewer;
-        private Thread blobReader;
-        private Thread blobWriter;
+        private Task leaseRenewer;
+        private Task blobReader;
+        private Task blobWriter;
 
-        private ManualResetEvent stopLeaseRenewer = new ManualResetEvent(false);
-        private ManualResetEvent stopBlobReader = new ManualResetEvent(false);
-        private ManualResetEvent stopBlobWriter = new ManualResetEvent(false);
+        private ManualResetEventSlim stopLeaseRenewer = new ManualResetEventSlim(false);
+        private ManualResetEventSlim stopBlobReader = new ManualResetEventSlim(false);
+        private ManualResetEventSlim stopBlobWriter = new ManualResetEventSlim(false);
 
         private AccessCondition writeAccessCondition = new AccessCondition();
         private AccessCondition readAccessCondition = new AccessCondition();
