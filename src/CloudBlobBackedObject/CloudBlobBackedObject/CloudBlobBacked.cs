@@ -80,9 +80,10 @@ namespace CloudBlobBackedObject
                 leaseAcquired = AcquireLeaseIfBlobExists(leaseDuration.Value);
             }
 
-            bool exists = TryRefreshDataFromCloudBlob();
+            Task<bool> existenceChecker = TryRefreshDataFromCloudBlob();
+            existenceChecker.Wait();
 
-            if (!exists)
+            if (!existenceChecker.Result)
             {
                 WriteLocalDataToCloudIfNeeded();
             }
@@ -294,61 +295,51 @@ namespace CloudBlobBackedObject
         private Task StartBlobReader(TimeSpan readFromCloudFrequency)
         {
             return Task.Run(
-                () =>
+                async () =>
                 {
                     bool stop = false;
                     while (!stop)
                     {
-                        TryRefreshDataFromCloudBlob();
+                        await TryRefreshDataFromCloudBlob();
                         stop = stopBlobReader.Wait(readFromCloudFrequency);
                     }
                 });
         }
 
-        private bool TryRefreshDataFromCloudBlob()
+        private async Task<bool> TryRefreshDataFromCloudBlob()
         {
-            bool exists = true;
+            bool exists = false;
+            T temp = default(T);
+            OperationContext context = new OperationContext();
+            
+            Stream blobContentsStream = await StorageOperation.TryAsync<Stream>(
+                this.backingBlob.OpenReadAsync(accessCondition: this.readAccessCondition, options: null, operationContext: context),
+                handleHttp404: _ => { exists = false; return null; },
+                handleHttp304: _ => { exists = true; return null; },
+                handleHttp412: _ => { exists = true; return null; });
 
-            StorageOperation.Try(
-                () =>
+            if (blobContentsStream != null)
+            {
+                lock (this.syncRoot)
                 {
-                    T temp = default(T);
-                    OperationContext context = new OperationContext();
+                    exists = Serialization.DeserializeInto<T>(
+                        ref temp,
+                        blobContentsStream,
+                        out this.lastKnownBlobContentsHash);
 
-                    lock (this.syncRoot)
+                    this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
+
+                    this.localObject = temp;
+
+                    if (exists)
                     {
-                        StorageOperation.Try(
-                            () =>
-                            {
-                                Stream blobContentsStream = this.backingBlob.OpenRead(
-                                    accessCondition: this.readAccessCondition, 
-                                    operationContext: context);
-
-                                exists = Serialization.DeserializeInto<T>(
-                                    ref temp, 
-                                    blobContentsStream, 
-                                    out this.lastKnownBlobContentsHash);
-
-                                this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
-                            },
-                            catchHttp404: e =>
-                            {
-                                exists = false;
-                            });
-
-                        this.localObject = temp;
-
-                        if (exists)
+                        if (this.OnUpdate != null)
                         {
-                            if (this.OnUpdate != null)
-                            {
-                                this.OnUpdate(this, EventArgs.Empty);
-                            }
+                            this.OnUpdate(this, EventArgs.Empty);
                         }
                     }
-                },
-                catchHttp304: e => { },
-                catchHttp412: e => { });
+                }
+            }
 
             return exists;
         }

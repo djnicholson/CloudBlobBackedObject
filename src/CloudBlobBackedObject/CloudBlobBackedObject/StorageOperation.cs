@@ -1,12 +1,13 @@
-﻿using Microsoft.WindowsAzure.Storage;
+﻿using System;
+using System.Threading.Tasks;
 
-using System;
+using Microsoft.WindowsAzure.Storage;
 
 namespace CloudBlobBackedObject
 {
     internal static class StorageOperation
     {
-        public static void Try(
+        internal static void Try(
             Action operation,
             Action<StorageException> catchHttp304 = null,
             Action<StorageException> catchHttp404 = null,
@@ -43,6 +44,45 @@ namespace CloudBlobBackedObject
             }
         }
 
+        internal static async Task<T> TryAsync<T>(
+            Task<T> operation,
+            Func<StorageException, T> handleHttp304 = null,
+            Func<StorageException, T> handleHttp404 = null,
+            Func<StorageException, T> handleHttp409 = null,
+            Func<StorageException, T> handleHttp412 = null)
+        {
+            try
+            {
+                await operation;
+            }
+            catch (StorageException e)
+            {
+                int httpStatus = HttpStatusCode(e);
+                if (handleHttp304 != null && httpStatus == 304)
+                {
+                    return handleHttp304(e);
+                }
+                else if (handleHttp404 != null && httpStatus == 404)
+                {
+                    return handleHttp404(e);
+                }
+                else if (handleHttp409 != null && httpStatus == 409)
+                {
+                    return handleHttp409(e);
+                }
+                else if (handleHttp412 != null && httpStatus == 412)
+                {
+                    return handleHttp412(e);
+                }
+                else
+                {
+                    throw;
+                }
+            }
+
+            return operation.Result;
+        }
+
         private static int HttpStatusCode(StorageException e)
         {
             if (e == null || e.RequestInformation == null)
@@ -51,6 +91,5 @@ namespace CloudBlobBackedObject
             }
             return e.RequestInformation.HttpStatusCode;
         }
-
     }
 }
