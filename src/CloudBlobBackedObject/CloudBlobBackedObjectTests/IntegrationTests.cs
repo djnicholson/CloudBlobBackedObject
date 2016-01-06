@@ -202,13 +202,44 @@ namespace CloudBlobBackedObjectTests
             otherWriter.Shutdown();
         }
 
-        public void ReaderWriterImpl(TimeSpan? lease = null)
+        [TestMethod]
+        public void ReaderWriterWithoutLease()
         {
             var blob = NewBlob();
 
             var writer = new CloudBlobBacked<string>(
                 blob,
-                leaseDuration: lease,
+                leaseDuration: null,
+                writeToCloudFrequency: ShortInterval);
+
+            var reader = new CloudBlobBacked<string>(
+                blob,
+                readFromCloudFrequency: ShortInterval);
+
+            writer.Object = "Hello world!";
+
+            int attempts = 0;
+            while (!writer.Object.Equals(reader.Object) && (attempts < 10))
+            {
+                PauseForReplication();
+                attempts++;
+            }
+
+            Assert.AreEqual(writer.Object, "Hello world!");
+            Assert.AreEqual(reader.Object, "Hello world!");
+
+            reader.Shutdown();
+            writer.Shutdown();
+        }
+
+        [TestMethod]
+        public void ReaderWriterWithLease()
+        {
+            var blob = NewBlob();
+
+            var writer = new CloudBlobBacked<string>(
+                blob,
+                leaseDuration: LeaseDuration,
                 writeToCloudFrequency: ShortInterval);
 
             var reader = new CloudBlobBacked<string>(
@@ -223,18 +254,6 @@ namespace CloudBlobBackedObjectTests
 
             reader.Shutdown();
             writer.Shutdown();
-        }
-
-        [TestMethod]
-        public void ReaderWriterWithoutLease()
-        {
-            ReaderWriterImpl();
-        }
-
-        [TestMethod]
-        public void ReaderWriterWithLease()
-        {
-            ReaderWriterImpl(lease: LeaseDuration);
         }
 
         [TestMethod]
