@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace CloudBlobBackedObject
 {
@@ -170,28 +171,27 @@ namespace CloudBlobBackedObject
         /// </summary>
         public void Shutdown()
         {
-            if (this.blobReader != null)
-            {
-                MarshalledExceptionsTask t = this.blobReader;
-                this.blobReader = null;
-                this.stopBlobReader.Set();
-                t.Wait();
-            }
+            TryAwaitStop(taskToAwait: ref this.blobReader, stopSignal: this.stopBlobReader);
 
-            if (this.blobWriter != null)
-            {
-                MarshalledExceptionsTask t = this.blobWriter;
-                this.blobWriter = null;
-                this.stopBlobWriter.Set();
-                t.Wait();
-            }
+            TryAwaitStop(taskToAwait: ref this.blobWriter, stopSignal: this.stopBlobWriter);
 
-            if (this.leaseRenewer != null)
+            TryAwaitStop(taskToAwait: ref this.leaseRenewer, stopSignal: this.stopLeaseRenewer);
+        }
+
+        private static void TryAwaitStop(ref Task taskToAwait, ManualResetEventSlim stopSignal)
+        {
+            stopSignal.Set();
+
+            if (taskToAwait != null)
             {
-                MarshalledExceptionsTask t = this.leaseRenewer;
-                this.leaseRenewer = null;
-                this.stopLeaseRenewer.Set();
-                t.Wait();
+                taskToAwait.Wait();
+
+                if (taskToAwait.Exception != null)
+                {
+                    throw taskToAwait.Exception;
+                }
+
+                taskToAwait = null;
             }
         }
 
@@ -225,9 +225,9 @@ namespace CloudBlobBackedObject
         /// Starts a task that triggers a request to renew the lease on the backing blob MinimumLeaseInSeconds
         /// before it expires, and releases the lease when the task is aborted.
         /// </summary>
-        private MarshalledExceptionsTask StartLeaseRenewer(TimeSpan leaseDuration)
+        private Task StartLeaseRenewer(TimeSpan leaseDuration)
         {
-            return new MarshalledExceptionsTask(
+            return Task.Run(
                 () =>
                 {
                     bool stop = false;
@@ -273,9 +273,9 @@ namespace CloudBlobBackedObject
         /// Start a task that writes the local state to the backing blob (if needed) at the given frequency,
         /// and writes the local state one final time when the task is aborted.
         /// </summary>
-        private MarshalledExceptionsTask StartBlobWriter(TimeSpan writeToCloudFrequency)
+        private Task StartBlobWriter(TimeSpan writeToCloudFrequency)
         {
-            return new MarshalledExceptionsTask(
+            return Task.Run(
                 () =>
                 {
                     bool stop = false;
@@ -291,9 +291,9 @@ namespace CloudBlobBackedObject
         /// Starts a task that updates the local state from the backing blob at the given
         /// frequency.
         /// </summary>
-        private MarshalledExceptionsTask StartBlobReader(TimeSpan readFromCloudFrequency)
+        private Task StartBlobReader(TimeSpan readFromCloudFrequency)
         {
-            return new MarshalledExceptionsTask(
+            return Task.Run(
                 () =>
                 {
                     bool stop = false;
@@ -407,9 +407,9 @@ namespace CloudBlobBackedObject
             }
         }
 
-        private MarshalledExceptionsTask leaseRenewer;
-        private MarshalledExceptionsTask blobReader;
-        private MarshalledExceptionsTask blobWriter;
+        private Task leaseRenewer;
+        private Task blobReader;
+        private Task blobWriter;
 
         private ManualResetEventSlim stopLeaseRenewer = new ManualResetEventSlim(false);
         private ManualResetEventSlim stopBlobReader = new ManualResetEventSlim(false);

@@ -80,7 +80,6 @@
     </Otherwise>
   </Choose>
   <ItemGroup>
-    <Compile Include="MarshalledExceptionsTaskTests.cs" />
     <Compile Include="MockCloudBlob.cs" />
     <Compile Include="IntegrationTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
