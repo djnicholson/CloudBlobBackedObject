@@ -2,9 +2,9 @@
 using Microsoft.WindowsAzure.Storage.Blob;
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace CloudBlobBackedObject
 {
@@ -163,10 +163,8 @@ namespace CloudBlobBackedObject
         public event EventHandler OnUpdate;
 
         /// <summary>
-        /// Aborts the various worker tasks.  The writer task is allowed to fully terminate before the
-        /// lease renewer task is aborted (to allow a final write to succeed before giving up the lease).
-        /// 
-        /// TODO: Remove this (dangerous due to arbitrary finalizer invocation order)
+        /// Aborts the various worker threads.  The writer thread is allowed to fully terminate before the
+        /// lease renewer thread is aborted (to allow a final write to succeed before giving up the lease).
         /// </summary>
         ~CloudBlobBacked()
         {
@@ -174,8 +172,8 @@ namespace CloudBlobBackedObject
         }
 
         /// <summary>
-        /// Aborts the various worker tasks.  The writer task is allowed to fully terminate before the
-        /// lease renewer task is aborted (to allow a final write to succeed before giving up the lease).
+        /// Aborts the various worker threads.  The writer thread is allowed to fully terminate before the
+        /// lease renewer thread is aborted (to allow a final write to succeed before giving up the lease).
         /// The object can still be used after calling Shutdown, but it will no longer be periodically
         /// synchonrized with the data in the cloud and the lease (if taken) will be given up.
         /// </summary>
@@ -183,26 +181,26 @@ namespace CloudBlobBackedObject
         {
             if (this.blobReader != null)
             {
-                Task t = this.blobReader;
+                MarshalledExceptionsThread t = this.blobReader;
                 this.blobReader = null;
                 this.stopBlobReader.Set();
-                t.Wait();
+                t.Join();
             }
 
             if (this.blobWriter != null)
             {
-                Task t = this.blobWriter;
+                MarshalledExceptionsThread t = this.blobWriter;
                 this.blobWriter = null;
                 this.stopBlobWriter.Set();
-                t.Wait();
+                t.Join();
             }
 
             if (this.leaseRenewer != null)
             {
-                Task t = this.leaseRenewer;
+                MarshalledExceptionsThread t = this.leaseRenewer;
                 this.leaseRenewer = null;
                 this.stopLeaseRenewer.Set();
-                t.Wait();
+                t.Join();
             }
         }
 
@@ -233,84 +231,90 @@ namespace CloudBlobBackedObject
         }
 
         /// <summary>
-        /// Starts a task that triggers a request to renew the lease on the backing blob MinimumLeaseInSeconds
-        /// before it expires, and releases the lease whent the task is aborted.
+        /// Starts a thread that triggers a request to renew the lease on the backing blob MinimumLeaseInSeconds
+        /// before it expires, and releases the lease whent he thread is aborted.
         /// </summary>
         private void StartLeaseRenewer(TimeSpan leaseDuration)
         {
-            this.leaseRenewer = Task.Run(() =>
-            {
-                bool stop = false;
-                while (!stop)
+            this.leaseRenewer = new MarshalledExceptionsThread(
+                () =>
                 {
-                    // Renew lease MinimumLeaseInSeconds before it expires:
-                    stop = stopLeaseRenewer.Wait(TimeSpan.FromSeconds(leaseDuration.TotalSeconds / 2.0));
-
-                    if (!stop)
+                    bool stop = false;
+                    while (!stop)
                     {
-                        StorageOperation.Try(
-                            () =>
-                            {
-                                lock (this.writeAccessCondition)
-                                {
-                                    this.backingBlob.RenewLease(this.writeAccessCondition);
-                                }
-                            },
-                            catchHttp409: e =>
-                            {
-                                // Lost our original lease (maybe due to this task sleeping for an extremely long time)
-                                AcquireLeaseForExistingBlob(leaseDuration);
-                            });
-                    }
-                }
+                        // Renew lease MinimumLeaseInSeconds before it expires:
+                        stop = stopLeaseRenewer.WaitOne(TimeSpan.FromSeconds(leaseDuration.TotalSeconds / 2.0));
 
-                StorageOperation.Try(
-                    () =>
-                    {
-                        lock (this.writeAccessCondition)
+                        if (!stop)
                         {
-                            this.backingBlob.ReleaseLease(this.writeAccessCondition);
+                            StorageOperation.Try(
+                                () =>
+                                {
+                                    lock (this.writeAccessCondition)
+                                    {
+                                        this.backingBlob.RenewLease(this.writeAccessCondition);
+                                    }
+                                },
+                                catchHttp409: e =>
+                                {
+                                    // Lost our original lease (maybe due to this thread sleeping for an extremely long time)
+                                    AcquireLeaseForExistingBlob(leaseDuration);
+                                });
                         }
-                    },
-                    catchHttp409: e =>
-                    {
-                        // Maybe we didn't have the lease anyway? Ooh well, we're shutting down anyway (absorb this error)
-                    });
-            });
+                    }
+
+                    StorageOperation.Try(
+                        () =>
+                        {
+                            lock (this.writeAccessCondition)
+                            {
+                                this.backingBlob.ReleaseLease(this.writeAccessCondition);
+                            }
+                        },
+                        catchHttp409: e =>
+                        {
+                            // Maybe we didn't have the lease anyway? Ooh well, we're shutting down anyway (absorb this error)
+                        });
+                });
+            this.leaseRenewer.Start();
         }
 
         /// <summary>
-        /// Start a task that writes the local state to the backing blob (if needed) at the given frequency,
-        /// and writes the local state one final time when the task is aborted.
+        /// Start a thread that writes the local state to the backing blob (if needed) at the given frequency,
+        /// and writes the local state one final time when the thread is aborted.
         /// </summary>
         private void StartBlobWriter(TimeSpan writeToCloudFrequency)
         {
-            this.blobWriter = Task.Run(() =>
-            {
-                bool stop = false;
-                while (!stop)
+            this.blobWriter = new MarshalledExceptionsThread(
+                () =>
                 {
-                    stop = stopBlobWriter.Wait(writeToCloudFrequency);
-                    WriteLocalDataToCloudIfNeeded();
-                }
-            });
+                    bool stop = false;
+                    while (!stop)
+                    {
+                        stop = stopBlobWriter.WaitOne(writeToCloudFrequency);
+                        WriteLocalDataToCloudIfNeeded();
+                    }
+                });
+            this.blobWriter.Start();
         }
 
         /// <summary>
-        /// Starts a task that updates the local state from the backing blob at the given
+        /// Starts a thread that updates the local state from the backing blob at the given
         /// frequency.
         /// </summary>
         private void StartBlobReader(TimeSpan readFromCloudFrequency)
         {
-            this.blobReader = Task.Run(() =>
-            {
-                bool stop = false;
-                while (!stop)
+            this.blobReader = new MarshalledExceptionsThread(
+                () =>
                 {
-                    TryRefreshDataFromCloudBlob();
-                    stop = stopBlobReader.Wait(readFromCloudFrequency);
-                }
-            });
+                    bool stop = false;
+                    while (!stop)
+                    {
+                        TryRefreshDataFromCloudBlob();
+                        stop = stopBlobReader.WaitOne(readFromCloudFrequency);
+                    }
+                });
+            this.blobReader.Start();
         }
 
         private bool TryRefreshDataFromCloudBlob()
@@ -407,7 +411,7 @@ namespace CloudBlobBackedObject
                         // There update has not been persisted.  Ensure that:
                         // A. The local data is shortly rolled back to reflect the state of the object in the cloud 
                         //    (if the user opted to poll for updates).
-                        // B. This write is retried (if still relevent) next time the writer task wakes up (whoever
+                        // B. This write is retried (if still relevent) next time the writer thread wakes up (whoever
                         //    has the lease may have gone away by then).
                         this.readAccessCondition.IfNoneMatchETag = null; // [A]
                         this.lastKnownBlobContentsHash = null; // [B]
@@ -415,13 +419,13 @@ namespace CloudBlobBackedObject
             }
         }
 
-        private Task leaseRenewer;
-        private Task blobReader;
-        private Task blobWriter;
+        private MarshalledExceptionsThread leaseRenewer;
+        private MarshalledExceptionsThread blobReader;
+        private MarshalledExceptionsThread blobWriter;
 
-        private ManualResetEventSlim stopLeaseRenewer = new ManualResetEventSlim(false);
-        private ManualResetEventSlim stopBlobReader = new ManualResetEventSlim(false);
-        private ManualResetEventSlim stopBlobWriter = new ManualResetEventSlim(false);
+        private ManualResetEvent stopLeaseRenewer = new ManualResetEvent(false);
+        private ManualResetEvent stopBlobReader = new ManualResetEvent(false);
+        private ManualResetEvent stopBlobWriter = new ManualResetEvent(false);
 
         private AccessCondition writeAccessCondition = new AccessCondition();
         private AccessCondition readAccessCondition = new AccessCondition();
@@ -430,5 +434,6 @@ namespace CloudBlobBackedObject
         private T localObject;
         private byte[] lastKnownBlobContentsHash;
         private Object syncRoot = new Object();
+        private Queue<Exception> backgroundExceptions = new Queue<Exception>();
     }
 }
