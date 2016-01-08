@@ -257,12 +257,14 @@ namespace CloudBlobBackedObjectTests
         }
 
         [TestMethod]
-        public void MultipleWriters()
+        public void MultipleWritersStress()
         {
             var blob = NewBlob();
 
             // Two instances fighting over the value of an object and a witness
-            // that ensures they each win at least once.
+            // that ensures they each win at least 'Difficulty' times.
+
+            const int Difficulty = 5;
 
             var witness = new CloudBlobBacked<string>(
                 blob,
@@ -278,16 +280,16 @@ namespace CloudBlobBackedObjectTests
                 readFromCloudFrequency: ShortInterval,
                 writeToCloudFrequency: TimeSpan.FromSeconds(0.7));
 
-            bool writer1Success = false;
-            bool writer2Success = false;
+            int writer1SuccessCount = 0;
+            int writer2SuccessCount = 0;
 
             witness.OnUpdate += (s, e) =>
             {
-                writer1Success |= "1".Equals(witness.Object);
-                writer2Success |= "2".Equals(witness.Object);
+                writer1SuccessCount += "1".Equals(witness.Object) ? 1 : 0;
+                writer2SuccessCount += "2".Equals(witness.Object) ? 1 : 0;
             };
                 
-            while (!writer1Success || !writer2Success)
+            while ((writer1SuccessCount < Difficulty) || (writer2SuccessCount < Difficulty))
             {
                 writer1.Object = "1";
                 writer2.Object = "2";
