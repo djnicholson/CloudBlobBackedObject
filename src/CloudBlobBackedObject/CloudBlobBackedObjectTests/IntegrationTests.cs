@@ -264,7 +264,7 @@ namespace CloudBlobBackedObjectTests
             // Two instances fighting over the value of an object and a witness
             // that ensures they each win at least 'Difficulty' times.
 
-            const int Difficulty = 5;
+            const int Difficulty = 3;
 
             var witness = new CloudBlobBacked<string>(
                 blob,
@@ -293,7 +293,7 @@ namespace CloudBlobBackedObjectTests
             {
                 writer1.Object = "1";
                 writer2.Object = "2";
-                Thread.Yield();
+                Thread.Sleep(TimeSpan.FromSeconds(0.5));
             }
 
             witness.Shutdown();
