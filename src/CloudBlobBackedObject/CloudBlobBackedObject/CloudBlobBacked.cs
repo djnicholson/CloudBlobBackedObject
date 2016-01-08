@@ -295,12 +295,12 @@ namespace CloudBlobBackedObject
         private Task StartBlobReader(TimeSpan readFromCloudFrequency)
         {
             return Task.Run(
-                async () =>
+                () =>
                 {
                     bool stop = false;
                     while (!stop)
                     {
-                        await TryRefreshDataFromCloudBlob();
+                        TryRefreshDataFromCloudBlob().Wait();
                         stop = stopBlobReader.Wait(readFromCloudFrequency);
                     }
                 });
