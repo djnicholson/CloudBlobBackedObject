@@ -2,10 +2,14 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
     <metadata>
         <id>CloudBlobBackedObject</id>
-        <version>1.1.5</version>
+        <version>1.1.6</version>
         <authors>David Nicholson</authors>
         <requireLicenseAcceptance>false</requireLicenseAcceptance>
-        <description>Generic CloudBlobBacked&lt;T&gt; class that allows arbitrary serializable objects to be shared between processes using Azure Blob Storage.</description>
+        <description>
+          Generic CloudBlobBacked&lt;T&gt; class that allows arbitrary serializable objects to be shared between processes using Azure Blob Storage.
+          
+          Source code: https://github.com/djnicholson/CloudBlobBackedObject
+        </description>
         <dependencies>
             <group targetFramework=".NETFramework4.5">
                 <dependency id="WindowsAzure.Storage" version="6.1.0" />
@@ -17,6 +21,7 @@
     </metadata>
     <files>
         <file src="..\..\target\Release\lib\CloudBlobBackedObject.dll" target="lib\net45\CloudBlobBackedObject.dll" />
+        <file src="..\..\target\Release\lib\CloudBlobBackedObject.pdb" target="lib\net45\CloudBlobBackedObject.pdb" />
         <file src="..\..\target\Release\lib\CloudBlobBackedObject.xml" target="lib\net45\CloudBlobBackedObject.xml" />
         <file src="..\CloudBlobBackedObject\CloudBlobBackedObject\CloudBlobBacked.cs" target="src\CloudBlobBacked.cs" />
     </files>
