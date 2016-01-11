@@ -264,7 +264,7 @@ namespace CloudBlobBackedObjectTests
             // Two instances fighting over the value of an object and a witness
             // that ensures they each win at least 'Difficulty' times.
 
-            const int Difficulty = 3;
+            const int Difficulty = 4;
 
             var witness = new CloudBlobBacked<string>(
                 blob,
