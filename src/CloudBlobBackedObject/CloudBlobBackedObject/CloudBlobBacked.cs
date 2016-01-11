@@ -347,7 +347,7 @@ namespace CloudBlobBackedObject
                         }
                     }
                 },
-                catchHttp304: e => { },
+                catchHttp304: e => { }, // TODO: Perf improvement; prevent throwing of exceptions in expected-case paths?
                 catchHttp412: e => { });
 
             return exists;
