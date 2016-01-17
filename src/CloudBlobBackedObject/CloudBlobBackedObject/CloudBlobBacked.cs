@@ -124,6 +124,8 @@ namespace CloudBlobBackedObject
         {
             get
             {
+                ThrowIfInErrorState();
+
                 T temp = null;
                 Interlocked.Exchange(ref temp, this.localObject);
                 return temp;
@@ -131,6 +133,8 @@ namespace CloudBlobBackedObject
 
             set
             {
+                ThrowIfInErrorState();
+
                 Interlocked.Exchange(ref this.localObject, value);
             }
         }
@@ -143,6 +147,8 @@ namespace CloudBlobBackedObject
         {
             get
             {
+                ThrowIfInErrorState();
+
                 return this.syncRoot;
             }
         }
@@ -154,6 +160,8 @@ namespace CloudBlobBackedObject
         {
             get
             {
+                ThrowIfInErrorState();
+
                 return this.backingBlob.StorageUri;
             }
         }
@@ -404,6 +412,35 @@ namespace CloudBlobBackedObject
                         this.readAccessCondition.IfNoneMatchETag = null; // [A]
                         this.lastKnownBlobContentsHash = null; // [B]
                     });
+            }
+        }
+
+        private void ThrowIfInErrorState()
+        {
+            ThrowIfFaulted(this.leaseRenewer);
+            ThrowIfFaulted(this.blobWriter);
+            ThrowIfFaulted(this.blobReader);
+        }
+
+        private void ThrowIfFaulted(Task task)
+        {
+            if (task == null)
+            {
+                return;
+            }
+
+            if (!task.IsFaulted)
+            {
+                return;
+            }
+
+            lock (task)
+            {
+                Exception e = task.Exception;
+                if (e != null)
+                {
+                    throw e;
+                }
             }
         }
 
