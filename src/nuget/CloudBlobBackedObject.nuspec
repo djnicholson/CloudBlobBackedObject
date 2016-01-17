@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
     <metadata>
         <id>CloudBlobBackedObject</id>
-        <version>1.1.6</version>
+        <version>1.1.7</version>
         <authors>David Nicholson</authors>
         <requireLicenseAcceptance>false</requireLicenseAcceptance>
         <description>
@@ -24,5 +24,9 @@
         <file src="..\..\target\Release\lib\CloudBlobBackedObject.pdb" target="lib\net45\CloudBlobBackedObject.pdb" />
         <file src="..\..\target\Release\lib\CloudBlobBackedObject.xml" target="lib\net45\CloudBlobBackedObject.xml" />
         <file src="..\CloudBlobBackedObject\CloudBlobBackedObject\CloudBlobBacked.cs" target="src\CloudBlobBacked.cs" />
+        <file src="..\CloudBlobBackedObject\CloudBlobBackedObject\Serialization.cs" target="src\Serialization.cs" />
+        <file src="..\CloudBlobBackedObject\CloudBlobBackedObject\SHA256StreamHasher.cs" target="src\SHA256StreamHasher.cs" />
+        <file src="..\CloudBlobBackedObject\CloudBlobBackedObject\StorageOperation.cs" target="src\StorageOperation.cs" />
+        <file src="..\CloudBlobBackedObject\CloudBlobBackedObject\StreamTee.cs" target="src\StreamTee.cs" />
     </files>
 </package>
