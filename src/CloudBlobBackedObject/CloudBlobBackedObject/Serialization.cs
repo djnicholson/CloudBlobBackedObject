@@ -28,7 +28,7 @@ namespace CloudBlobBackedObject
 
             if (compress)
             {
-                using (GZipStream compressor = new GZipStream(serializedObjectWriter, CompressionMode.Compress))
+                using (GZipStream compressor = new GZipStream(serializedObjectWriter, CompressionLevel.Fastest))
                 {
                     formatter.Serialize(compressor, obj);
                 }
