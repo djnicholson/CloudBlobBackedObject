@@ -20,7 +20,7 @@ namespace CloudBlobBackedObject
     /// the backing data in the blob).
     /// </summary>
     /// <typeparam name="T">Any serializable class</typeparam>
-    public class CloudBlobBacked<T> where T : class
+    public class CloudBlobBacked<T> : IDisposable where T : class
     {
         /// <summary>
         /// The minimum lease duration that may be passed to the constructor.
@@ -184,6 +184,14 @@ namespace CloudBlobBackedObject
             TryAwaitStop(taskToAwait: ref this.blobWriter, stopSignal: this.stopBlobWriter);
 
             TryAwaitStop(taskToAwait: ref this.leaseRenewer, stopSignal: this.stopLeaseRenewer);
+        }
+
+        /// <summary>
+        /// Calls <see cref="Shutdown"/>.
+        /// </summary>
+        public void Dispose()
+        {
+            Shutdown();
         }
 
         private static void TryAwaitStop(ref Task taskToAwait, ManualResetEventSlim stopSignal)
