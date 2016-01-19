@@ -419,8 +419,8 @@ namespace CloudBlobBackedObjectTests
         [TestMethod]
         public void BigDataStress()
         {
-            const int DataLengthInBytes = 1024 * 1024 * 5; // 5 MB
-            const int Iterations = 4;
+            const int DataLengthInBytes = 1024 * 1024 * 2; // 2 MB
+            const int Iterations = 6;
 
             Random r = new Random();
 
