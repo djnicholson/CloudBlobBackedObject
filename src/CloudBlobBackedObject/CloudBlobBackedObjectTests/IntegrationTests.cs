@@ -446,7 +446,7 @@ namespace CloudBlobBackedObjectTests
             }
         }
 
-        private static readonly TimeSpan LeaseDuration = TimeSpan.FromMinutes(0.5);
+        private static readonly TimeSpan LeaseDuration = TimeSpan.FromMinutes(0.4);
         private static readonly TimeSpan ShortInterval = TimeSpan.FromSeconds(0.1);
         private static readonly TimeSpan LongerInterval = TimeSpan.FromSeconds(2.0);
 
