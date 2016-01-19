@@ -406,24 +406,36 @@ namespace CloudBlobBackedObject
                         this.readAccessCondition.IfNoneMatchETag = context.LastResult.Etag;
                         this.lastKnownBlobContentsHash = localContentHash;
                     },
-                    catchHttp412: e => 
+                    catchHttp400: e =>
                     {
-                        if (!string.IsNullOrEmpty(writeAccessConditionAtStartOfUpload.LeaseId))
-                        {
-                            // Someone else has the lease, but we are supposed to have it. That is bad.
-                            throw new TimeoutException("Lease was lost and updates cannot be saved", e);
-                        }
-
-                        // User optimistically tried to update an object that they opted not to take a lease on.
-                        // There update has not been persisted.  Ensure that:
-                        // A. The local data is shortly rolled back to reflect the state of the object in the cloud 
-                        //    (if the user opted to poll for updates).
-                        // B. This write is retried (if still relevent) next time the writer task wakes up (whoever
-                        //    has the lease may have gone away by then).
-                        this.readAccessCondition.IfNoneMatchETag = null; // [A]
-                        this.lastKnownBlobContentsHash = null; // [B]
+                        // Can happen when two clients race to perform an upload to the same blob; one
+                        // client will get a HTTP 400 when committing their list of uploaded blocks.
+                        OnWriteToCloudFailure(e, writeAccessConditionAtStartOfUpload);
+                    },
+                    catchHttp412: e =>
+                    {
+                        // There is a lease in place that prevents this write.
+                        OnWriteToCloudFailure(e, writeAccessConditionAtStartOfUpload);
                     });
             }
+        }
+
+        private void OnWriteToCloudFailure(StorageException e, AccessCondition writeAccessConditionAtStartOfUpload)
+        {
+            if (!string.IsNullOrEmpty(writeAccessConditionAtStartOfUpload.LeaseId))
+            {
+                // Someone else has the lease, but we are supposed to have it. That is bad.
+                throw new TimeoutException("Lease was lost and updates cannot be saved", e);
+            }
+
+            // User optimistically tried to update an object that they opted not to take a lease on.
+            // There update has not been persisted.  Ensure that:
+            // A. The local data is shortly rolled back to reflect the state of the object in the cloud 
+            //    (if the user opted to poll for updates).
+            // B. This write is retried (if still relevent) next time the writer task wakes up (whoever
+            //    has the lease may have gone away by then).
+            this.readAccessCondition.IfNoneMatchETag = null; // [A]
+            this.lastKnownBlobContentsHash = null; // [B]
         }
 
         private void ThrowIfInErrorState()

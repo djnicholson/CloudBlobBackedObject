@@ -9,6 +9,7 @@ namespace CloudBlobBackedObject
         public static void Try(
             Action operation,
             Action<StorageException> catchHttp304 = null,
+            Action<StorageException> catchHttp400 = null,
             Action<StorageException> catchHttp404 = null,
             Action<StorageException> catchHttp409 = null,
             Action<StorageException> catchHttp412 = null)
@@ -23,6 +24,10 @@ namespace CloudBlobBackedObject
                 if (catchHttp304 != null && httpStatus == 304)
                 {
                     catchHttp304(e);
+                }
+                else if (catchHttp400 != null && httpStatus == 400)
+                {
+                    catchHttp400(e);
                 }
                 else if (catchHttp404 != null && httpStatus == 404)
                 {
