@@ -3,6 +3,7 @@ using Microsoft.WindowsAzure.Storage.Blob;
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -246,11 +247,11 @@ namespace CloudBlobBackedObject
             return Task.Run(
                 () =>
                 {
+                    Stopwatch timer = Stopwatch.StartNew();
                     bool stop = false;
                     while (!stop)
                     {
-                        // Renew lease MinimumLeaseInSeconds before it expires:
-                        stop = stopLeaseRenewer.Wait(TimeSpan.FromSeconds(leaseDuration.TotalSeconds / 2.0));
+                        stop = stopLeaseRenewer.Wait(TimeSpan.FromTicks(timer.ElapsedTicks % (leaseDuration.Ticks / 2)));
 
                         if (!stop)
                         {
@@ -294,10 +295,11 @@ namespace CloudBlobBackedObject
             return Task.Run(
                 () =>
                 {
+                    Stopwatch timer = Stopwatch.StartNew();
                     bool stop = false;
                     while (!stop)
                     {
-                        stop = stopBlobWriter.Wait(writeToCloudFrequency);
+                        stop = stopBlobWriter.Wait(TimeSpan.FromTicks(timer.ElapsedTicks % writeToCloudFrequency.Ticks));
                         WriteLocalDataToCloudIfNeeded();
                     }
                 });
@@ -312,11 +314,12 @@ namespace CloudBlobBackedObject
             return Task.Run(
                 () =>
                 {
+                    Stopwatch timer = Stopwatch.StartNew();
                     bool stop = false;
                     while (!stop)
                     {
                         TryRefreshDataFromCloudBlob();
-                        stop = stopBlobReader.Wait(readFromCloudFrequency);
+                        stop = stopBlobReader.Wait(TimeSpan.FromTicks(timer.ElapsedTicks % readFromCloudFrequency.Ticks));
                     }
                 });
         }
