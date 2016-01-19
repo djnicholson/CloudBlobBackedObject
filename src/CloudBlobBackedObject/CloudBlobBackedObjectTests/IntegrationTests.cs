@@ -416,6 +416,36 @@ namespace CloudBlobBackedObjectTests
             writer2.Shutdown();
         }
 
+        [TestMethod]
+        public void BigDataStress()
+        {
+            const int DataLengthInBytes = 1024 * 1024 * 5; // 5 MB
+            const int Iterations = 4;
+
+            Random r = new Random();
+
+            var blob = NewBlob();
+
+            for (int i = 0; i < Iterations; i++)
+            {
+                using (var readWriterWithLease = new CloudBlobBacked<byte[]>(
+                    blob,
+                    readFromCloudFrequency: ShortInterval,
+                    writeToCloudFrequency: ShortInterval,
+                    leaseDuration: LeaseDuration))
+                {
+                    lock (readWriterWithLease.SyncRoot)
+                    {
+                        readWriterWithLease.Object = new byte[DataLengthInBytes];
+                        for (int j = 0; j < readWriterWithLease.Object.Length; j++)
+                        {
+                            readWriterWithLease.Object[j] = (byte) r.Next();
+                        }
+                    }
+                }
+            }
+        }
+
         private static readonly TimeSpan LeaseDuration = TimeSpan.FromMinutes(0.5);
         private static readonly TimeSpan ShortInterval = TimeSpan.FromSeconds(0.1);
         private static readonly TimeSpan LongerInterval = TimeSpan.FromSeconds(2.0);
